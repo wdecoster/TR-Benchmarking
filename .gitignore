@@ -22,3 +22,4 @@ conf/local/
 work/
 .nextflow*
 pipeline_info/
+.git_commit
