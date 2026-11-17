@@ -115,9 +115,13 @@ process giab_30x {
     set -euo pipefail
     printf '${cov_lines}\\n${sample}\\ttotal\\t${covs.sum()}\\tsamtools -s ${subsample}\\n' > ${sample}.coverage.tsv
 
+    # the flow cells are streamed in parallel: a single HTTPS stream from S3 reached only ~6 MB/s (2026-11-17)
+    pids=()
     for fc in ${flowcells.join(' ')}; do
-        samtools view -@ ${task.cpus} -T ${ref} -s ${subsample} -C -o \$fc.cram ${region_opt} ${base}/\$fc/output/SAMPLE.haplotagged.cram
+        samtools view -@ ${task.cpus} -T ${ref} -s ${subsample} -C -o \$fc.cram ${region_opt} ${base}/\$fc/output/SAMPLE.haplotagged.cram &
+        pids+=(\$!)
     done
+    for p in "\${pids[@]}"; do wait \$p; done
     samtools merge -@ ${task.cpus} --reference ${ref} -O CRAM -o merged.cram ${flowcells.collect { it + '.cram' }.join(' ')}
     samtools view -H merged.cram | sed -E '/^@SQ/s/\\tUR:[^\\t]*//' > header.sam
     samtools reheader -i header.sam merged.cram
