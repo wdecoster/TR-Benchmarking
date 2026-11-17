@@ -34,7 +34,12 @@ Results go to `<outdir>/<mode>/<tool>/<version>/`, so versions never overwrite e
 | Straglr | 1.5.5 (git checkout) | the 1.5.5 container declared in the original workflow | same version, presumably |
 | STRdust | 0.16.0 (static binary) | biocontainers strdust 0.16.0 | same version |
 | STRkit | 0.24.2 | the paper's ghcr container | yes |
-| vamos | 3.0.5 and 2.1.7 (compiled) | biocontainers vamos 3.0.5 / 2.1.7 | same version |
+| vamos | 3.0.5 and 2.1.7 (compiled) | biocontainers vamos 3.0.5 / 2.1.7 | same version* |
+
+\* The upstream tags vamos-v3.0.4, v3.0.5 and v3.0.6 all point to the same commit (d45c4d0, 2026-02-09), whose
+binary reports "Version: 3.0.4". "vamos 3.0.5" is therefore that commit.
+
+Versions reported by every container: `tests/containers.nf` (all 21 images checked 2026-11-17).
 
 ### Command changes in current versions
 - ATaRVa ≥ 0.7: `atarva genotype ...` (same options).
@@ -54,6 +59,11 @@ nextflow run main.nf -profile local,current -c conf/local/<site>.config --list .
 `conf/site.config.example` shows the site settings (output folder, reference, core budget). Launch from the
 results folder. The trace in `pipeline_info/` records wall time, %CPU (CPU time = realtime × %cpu) and peak memory
 per task; each task directory also records the machine load at its start and end (`.loadavg_start/_end`).
+
+## Reproduction targets
+- Pathogenic loci (paper Fig. 6): `scripts/pathogenic_results.{default,min_reads}.tsv` hold the per-sample,
+  per-tool allele lengths and sequences, so this part can be reproduced call by call (data: SRA PRJNA786382).
+- Timing (Fig. 1): relative between tools only, since the hardware differs.
 
 ## Re-run rule
 A tool is re-run when its **major or minor** version changes; patch releases are not re-run.
