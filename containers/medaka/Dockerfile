@@ -1,7 +1,8 @@
 # medaka from bioconda with pyabpoa pinned to the version medaka checks for at run time. The bioconda recipes of
 # medaka 2.1.1 do not pin pyabpoa, so every published 2.1.1 image carries a newer one and `medaka tandem` refuses
 # to start ("pyabpoa == 1.5.1 required"). The resolved environment is exported next to the tool.
-FROM mambaorg/micromamba:2.3.3
+# Debian 12 (glibc 2.36): newer glibc refuses the PyTorch build medaka 2.1.1 resolves to ("cannot enable executable stack")
+FROM mambaorg/micromamba:2.3.3-debian12-slim
 ARG MEDAKA_VERSION
 ARG PYABPOA_VERSION
 ARG PYTHON_VERSION
