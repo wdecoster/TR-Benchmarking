@@ -283,8 +283,12 @@ process strdust {
       -R ${catalog} ${params.tool_versions.strdust.unphased} ${extra} -t ${task.cpus} --sample ${sample} \\
       ${haploid} ${ref} ${aln} > ${sample}.strdust.vcf
 
+    # same order as the original "sort -k1,1V -k2,2n" for chr1-22/X/Y/M (all the catalog has), written without
+    # -V because the STRdust 1.x container only has busybox sort
     { grep '^#' ${sample}.strdust.vcf; \\
-      grep -v '^#' ${sample}.strdust.vcf | sort -t "\$(printf '\\t')" -k1,1V -k2,2n; \\
+      grep -v '^#' ${sample}.strdust.vcf \\
+        | awk -F '\\t' -v OFS='\\t' '{ c = \$1; sub(/^chr/, "", c); k = (c ~ /^[0-9]+\$/) ? sprintf("0%09d", c) : "1" c; print k, \$0 }' \\
+        | LC_ALL=C sort -t "\$(printf '\\t')" -k1,1 -k3,3n | cut -f2-; \\
     } > ${sample}.strdust.sorted.vcf
     """
 }
