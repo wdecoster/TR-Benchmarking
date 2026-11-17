@@ -15,7 +15,9 @@ nextflow.enable.dsl = 2
  *  - @SQ UR tags (paths on the EPI2ME system) are removed from the header, as the paper did for medaka
  *    (medaka issue #574);
  *  - optional --slice_pad N keeps only reads overlapping the catalog loci +/- N bp (lighter; must be
- *    shown to give the same calls before use, see docs/FORK.md).
+ *    shown to give the same calls before use). NOTE 2026-11-17: indexed region reads from the S3 CRAMs fail
+ *    ("Container header CRC32 failure" for every region; the .crai seems not to match), so slicing needs a
+ *    local copy first.
  *
  * Open question: hac or sup basecalls? The paper does not say; --basecall chooses (default sup).
  *
@@ -40,6 +42,8 @@ params.samtools_container = 'quay.io/biocontainers/samtools:1.22.1--h96c455f_0'
 if (!params.ref || !params.outdir) error("--ref and --outdir are required")
 if (!(params.basecall in ['hac', 'sup'])) error("--basecall must be hac or sup")
 
+def baseUrl(sample) { "https://ont-open-data.s3.amazonaws.com/giab_2025.01/analysis/wf-human-variation/${params.basecall}/${sample}" }
+
 workflow {
     ref = file(params.ref, checkIfExists: true)
     fai = file("${params.ref}.fai", checkIfExists: true)
@@ -48,7 +52,20 @@ workflow {
     rows = Channel.fromPath(params.table, checkIfExists: true)
         .splitCsv(header: true, sep: '\t')
         .filter { it.sample in wanted }
-        .map { tuple(it.sample, it.karyotype, it.flowcells.tokenize(',')) }
+        .map { row ->
+            // coverage per flow cell from the EPI2ME mosdepth summaries (small text files, read here because the
+            // samtools container has no curl); fraction = target / sum, as the seed.fraction argument of samtools -s
+            def fcs = row.flowcells.tokenize(',')
+            def covs = fcs.collect { fc ->
+                def line = new URL("${baseUrl(row.sample)}/${fc}/output/SAMPLE.mosdepth.summary.txt").text.readLines().find { it.startsWith('total\t') }
+                if (!line) error("no total coverage for ${row.sample} ${fc}")
+                line.split('\t')[3] as BigDecimal
+            }
+            def frac = params.target_cov / covs.sum()
+            if (frac >= 1) error("${row.sample}: coverage ${covs.sum()} below target ${params.target_cov}")
+            def s = "${params.seed}" + String.format("%.${params.decimals}f", frac).substring(1)
+            tuple(row.sample, row.karyotype, fcs, covs, s)
+        }
 
     regions = params.slice_pad != null ? slice_regions(file(params.catalog, checkIfExists: true)) : file('NO_REGIONS')
     prepared = giab_30x(rows, ref, fai, regions).cram
@@ -81,7 +98,7 @@ process giab_30x {
     publishDir "${params.outdir}/giab_${params.basecall}", mode: 'copy'
 
     input:
-    tuple val(sample), val(karyotype), val(flowcells)
+    tuple val(sample), val(karyotype), val(flowcells), val(covs), val(subsample)
     path ref
     path fai
     path regions
@@ -91,23 +108,15 @@ process giab_30x {
     path "${sample}.coverage.tsv"
 
     script:
-    def base = "https://ont-open-data.s3.amazonaws.com/giab_2025.01/analysis/wf-human-variation/${params.basecall}/${sample}"
+    def base = baseUrl(sample)
     def region_opt = regions.name == 'NO_REGIONS' ? '' : "-M -L ${regions}"
+    def cov_lines = [flowcells, covs].transpose().collect { fc, c -> "${sample}\\t${fc}\\t${c}" }.join('\\n')
     """
     set -euo pipefail
-    total=0
-    for fc in ${flowcells.join(' ')}; do
-        cov=\$(curl -sf ${base}/\$fc/output/SAMPLE.mosdepth.summary.txt | awk '\$1=="total"{print \$4}')
-        [ -n "\$cov" ] || { echo "no coverage for \$fc" >&2; exit 1; }
-        echo -e "${sample}\\t\$fc\\t\$cov" >> ${sample}.coverage.tsv
-        total=\$(awk -v a=\$total -v b=\$cov 'BEGIN{print a+b}')
-    done
-    frac=\$(awk -v t=${params.target_cov} -v c=\$total -v d=${params.decimals} 'BEGIN{f=t/c; if (f>=1) exit 1; printf "%.*f", d, f}')
-    s="${params.seed}\${frac#0}"
-    echo -e "${sample}\\ttotal\\t\$total\\tsamtools -s \$s" >> ${sample}.coverage.tsv
+    printf '${cov_lines}\\n${sample}\\ttotal\\t${covs.sum()}\\tsamtools -s ${subsample}\\n' > ${sample}.coverage.tsv
 
     for fc in ${flowcells.join(' ')}; do
-        samtools view -@ ${task.cpus} -T ${ref} -s \$s -C -o \$fc.cram ${region_opt} ${base}/\$fc/output/SAMPLE.haplotagged.cram
+        samtools view -@ ${task.cpus} -T ${ref} -s ${subsample} -C -o \$fc.cram ${region_opt} ${base}/\$fc/output/SAMPLE.haplotagged.cram
     done
     samtools merge -@ ${task.cpus} --reference ${ref} -O CRAM -o merged.cram ${flowcells.collect { it + '.cram' }.join(' ')}
     samtools view -H merged.cram | sed -E '/^@SQ/s/\\tUR:[^\\t]*//' > header.sam
