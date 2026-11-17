@@ -18,6 +18,7 @@ print(c['host'], c['username'], c['privateKeyPath'], c['remotePath'])")
 files=$(mktemp)
 git ls-files > "$files"
 [ -d conf/local ] && find conf/local -type f >> "$files"
+git rev-parse --short HEAD > .git_commit; echo .git_commit >> "$files"
 rsync $dry -rlci --files-from="$files" -e "ssh -i $key -o BatchMode=yes -o LogLevel=ERROR" ./ "$user@$host:$remote" \
     | grep -v '^\.' || true
 rm -f "$files"
