@@ -27,6 +27,7 @@ params.threads    = 1          // the paper timed every tool single-threaded
 params.catalog_dir = "${projectDir}/catalogs"
 params.catalog    = 'benchmark-catalog-v2'
 params.mosdepth   = false
+params.samtools_container = 'quay.io/biocontainers/samtools:1.22.1--h96c455f_0'
 
 def die(msg) { error(msg) }
 
@@ -43,6 +44,13 @@ selected.each { if (!params.tool_versions.containsKey(it)) die("tool '${it}' has
 def outFor = { String tool -> "${params.outdir}/${params.mode}/${tool}/${params.tool_versions[tool].version}" }
 def cat = { String suffix -> "${params.catalog_dir}/${params.catalog}.${suffix}" }
 def sensitive = params.mode == 'sensitive'
+
+// exported in tool scripts that need the cache; fails the task if htslib still could not decode CRAM slices,
+// because some tools (vamos) exit 0 with an empty result in that case
+def refEnv = 'export REF_PATH="$PWD/ref_cache/%2s/%2s/%s"; export REF_CACHE="$REF_PATH"'
+// (the tool's stderr goes to tool.err first, then to the task log, so the check does not race the log writer)
+def toolErr = '2> tool.err || { cat tool.err >&2; exit 1; }'
+def decodeCheck = 'cat tool.err >&2; if grep -q "Failure to decode slice\\|Unable to fetch reference" tool.err; then echo "CRAM decoding failed (reference not found)" >&2; exit 1; fi'
 
 def sampleName = { aln ->
     aln.name.replaceFirst(/\.(cram|bam)$/, '').replaceFirst(/\.merged$/, '')
@@ -70,24 +78,56 @@ workflow {
             tuple(sampleName(aln), aln, idx, karyo)
         }
 
+    // Tools that do not pass the FASTA to htslib as the CRAM reference (vamos takes no FASTA; ATaRVa 0.7) find the
+    // reference through REF_PATH: an MD5-keyed cache of the same FASTA (the input CRAMs carry no UR tags).
+    refcache = (selected.any { it in ['atarva', 'vamos', 'vamos_old'] }) ? ref_cache(ref, fai) : null
+
     if (params.mosdepth) mosdepth(samples, ref, fai)
-    if ('atarva' in selected)    atarva(samples, ref, fai, file(cat('atarva.bed.gz')), file(cat('atarva.bed.gz.tbi')))
+    if ('atarva' in selected)    atarva(samples, ref, fai, file(cat('atarva.bed.gz')), file(cat('atarva.bed.gz.tbi')), refcache)
     if ('longtr' in selected)    longtr(samples, ref, fai, file(cat('longtr.bed')))
     if ('medaka' in selected)    medaka(samples, ref, fai, file(cat('medaka.bed')))
     if ('straglr' in selected)   straglr(samples, ref, fai, file(cat('strglr.bed')))
     if ('strdust' in selected)   strdust(samples, ref, fai, file(cat('strdust.bed')))
     if ('strkit' in selected)    strkit(samples, ref, fai, file(cat('strkit.bed')))
     if ('vamos' in selected) {
-        vamos(samples, ref, fai, file(cat('vamos.bed')), 'vamos')
+        vamos(samples, ref, fai, file(cat('vamos.bed')), 'vamos', refcache)
         vamos_fix(vamos.out.raw, ref, fai, file("${projectDir}/scripts/${params.tool_versions.vamos.fix_script}"), 'vamos')
     }
     if ('vamos_old' in selected) {   // vamos 2.1.7, used next to 3.0.5 for the pathogenic loci
-        vamos_old(samples, ref, fai, file(cat('vamos.bed')), 'vamos_old')
+        vamos_old(samples, ref, fai, file(cat('vamos.bed')), 'vamos_old', refcache)
         vamos_old_fix(vamos_old.out.raw, ref, fai, file("${projectDir}/scripts/${params.tool_versions.vamos_old.fix_script}"), 'vamos_old')
     }
 }
 
 /* -------------------------------------------------------------------------- */
+
+// htslib reference cache (REF_PATH layout %2s/%2s/%s): MD5 of each upper-cased sequence, as in the @SQ M5 tags
+process ref_cache {
+    container params.samtools_container
+    cpus 1
+    memory 4.GB
+    storeDir "${params.outdir}/ref_cache"
+
+    input:
+    path ref
+    path fai
+
+    output:
+    path 'ref_cache'
+
+    script:
+    """
+    set -euo pipefail
+    mkdir -p tmp_cache
+    cut -f1 ${fai} | while read -r ctg; do
+        samtools faidx ${ref} "\$ctg" | tail -n +2 | tr -d '\\n' | tr a-z A-Z > seq
+        m=\$(md5sum seq | cut -c1-32)
+        mkdir -p tmp_cache/\${m:0:2}/\${m:2:2}
+        mv seq tmp_cache/\${m:0:2}/\${m:2:2}/\${m:4}
+    done
+    mv tmp_cache ref_cache
+    """
+}
 
 process mosdepth {
     container params.tool_versions.mosdepth.container
@@ -122,6 +162,7 @@ process atarva {
     path fai
     path catalog
     path catalog_tbi
+    path refcache
 
     output:
     path "${sample}.atarva.vcf"
@@ -129,7 +170,9 @@ process atarva {
     script:
     def extra = sensitive ? '--min-reads 1' : ''
     """
-    ${params.tool_versions.atarva.cmd} -t ${task.cpus} -f ${ref} -b ${aln} -r ${catalog} --format cram ${extra} --karyotype ${karyotype} -o ${sample}.atarva.vcf
+    ${refEnv}
+    ${params.tool_versions.atarva.cmd} -t ${task.cpus} -f ${ref} -b ${aln} -r ${catalog} --format cram ${extra} --karyotype ${karyotype} -o ${sample}.atarva.vcf ${toolErr}
+    ${decodeCheck}
     """
 }
 
@@ -287,13 +330,16 @@ process vamos {
     path fai
     path catalog
     val tool
+    path refcache
 
     output:
     tuple val(sample), path("${sample}.vamos.vcf"), emit: raw
 
     script:
     """
-    vamos --read -b ${aln} -r ${catalog} -s ${sample} -o ${sample}.vamos.vcf -S ${params.tool_versions[tool].extra} -t ${task.cpus}
+    ${refEnv}
+    vamos --read -b ${aln} -r ${catalog} -s ${sample} -o ${sample}.vamos.vcf -S ${params.tool_versions[tool].extra} -t ${task.cpus} ${toolErr}
+    ${decodeCheck}
     """
 }
 
@@ -310,13 +356,16 @@ process vamos_old {
     path fai
     path catalog
     val tool
+    path refcache
 
     output:
     tuple val(sample), path("${sample}.vamos.vcf"), emit: raw
 
     script:
     """
-    vamos --read -b ${aln} -r ${catalog} -s ${sample} -o ${sample}.vamos.vcf -S ${params.tool_versions[tool].extra} -t ${task.cpus}
+    ${refEnv}
+    vamos --read -b ${aln} -r ${catalog} -s ${sample} -o ${sample}.vamos.vcf -S ${params.tool_versions[tool].extra} -t ${task.cpus} ${toolErr}
+    ${decodeCheck}
     """
 }
 

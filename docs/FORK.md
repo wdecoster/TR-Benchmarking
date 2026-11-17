@@ -30,7 +30,7 @@ Results go to `<outdir>/<mode>/<tool>/<version>/`, so versions never overwrite e
 |---|---|---|---|
 | ATaRVa | 0.5.0 (local conda env) | `containers/atarva` (PyPI 0.5.0, dependencies as of the release date) | same version |
 | LongTR | 1.2 | the paper's Seqera container | yes |
-| Medaka Tandem | 2.1.1 (conda env) | biocontainers medaka 2.1.1 (py310) | same version |
+| Medaka Tandem | 2.1.1 (conda env) | `containers/medaka` (bioconda 2.1.1 with pyabpoa 1.5.1)† | same version |
 | Straglr | 1.5.5 (git checkout) | the 1.5.5 container declared in the original workflow | same version, presumably |
 | STRdust | 0.16.0 (static binary) | biocontainers strdust 0.16.0 | same version |
 | STRkit | 0.24.2 | the paper's ghcr container | yes |
@@ -39,7 +39,16 @@ Results go to `<outdir>/<mode>/<tool>/<version>/`, so versions never overwrite e
 \* The upstream tags vamos-v3.0.4, v3.0.5 and v3.0.6 all point to the same commit (d45c4d0, 2026-02-09), whose
 binary reports "Version: 3.0.4". "vamos 3.0.5" is therefore that commit.
 
+† The bioconda recipes of medaka 2.1.1 do not pin pyabpoa, and `medaka tandem` 2.1.1 refuses to start with anything
+but pyabpoa 1.5.1, so none of the published 2.1.1 images can run it.
+
 Versions reported by every container: `tests/containers.nf` (all 21 images checked 2026-11-17).
+
+### CRAM reference
+The input CRAMs carry no `@SQ UR` tags (removed because of medaka issue #574). Tools that do not hand the FASTA to
+htslib as the CRAM reference (vamos takes no FASTA; ATaRVa 0.7.1 does not use it for CRAM) find the reference through
+`REF_PATH`, pointing to an MD5-keyed cache built from the same FASTA (process `ref_cache`). Without it, vamos exits
+successfully with an empty VCF; such tasks now fail on htslib's decode errors.
 
 ### Command changes in current versions
 - ATaRVa ≥ 0.7: `atarva genotype ...` (same options).
