@@ -1,0 +1,11 @@
+// Copy to conf/local/<site>.config (git-ignored) and pass with -c.
+params {
+    outdir   = '/path/to/results/tr-benchmark'
+    ref      = '/path/to/GRCh38_no_alt_analysis_set.fasta'
+}
+apptainer.cacheDir = '/path/to/apptainer-cache'
+executor {
+    cpus   = 16        // total cores this run may use
+    memory = '200 GB'
+}
+workDir = '/path/to/results/tr-benchmark/work'

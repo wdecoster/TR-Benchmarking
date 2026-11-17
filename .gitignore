@@ -16,3 +16,9 @@
 /scripts/VCF_comparisons/__pycache__
 .Rproj.user
 visualization/.Rhistory
+# fork: site-specific config, sync settings and run artefacts
+conf/local/
+.vscode/
+work/
+.nextflow*
+pipeline_info/

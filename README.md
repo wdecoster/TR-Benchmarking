@@ -1,5 +1,8 @@
 # TR-Benchmarking
 
+> **Fork** of [dashnowlab/TR-Benchmarking](https://github.com/dashnowlab/TR-Benchmarking) that reproduces and
+> keeps updating the benchmark of Aliyev et al. 2026. See [docs/FORK.md](docs/FORK.md) for what changed and how to run it.
+
 Tandem repeat benchmarking project.
 
 ## Run Nextflow
