@@ -69,6 +69,24 @@ nextflow run main.nf -profile local,current -c conf/local/<site>.config --list .
 results folder. The trace in `pipeline_info/` records wall time, %CPU (CPU time = realtime × %cpu) and peak memory
 per task; each task directory also records the machine load at its start and end (`.loadavg_start/_end`).
 
+## Timing benchmark (`timing.nf`)
+Runtimes from the genome-wide runs are single measurements, taken while other jobs share the machine. `timing.nf`
+measures them more carefully on a small subset:
+- input CRAM and catalog restricted to one chromosome (`--chrom chr20`: 992 of the 43,009 loci);
+- every tool version of the chosen version sets (`--version_sets paper,current`; a version shared by both runs
+  once) × `--reps` replicates, single-threaded, **one run at a time**, in shuffled order. Nextflow does not
+  keep the input order when scheduling, so the actual order is recorded (start time per run), not fixed;
+- the same commands as `main.nf`: both workflows take them from `lib/TrCommands.groovy`;
+- output `timing/timing_chr20.tsv`: wall time of the tool command, load average at start and end, and a digest of
+  the calls (to check that replicates are identical); CPU time and peak memory are in the Nextflow trace.
+
+```bash
+nextflow run timing.nf -profile local -c conf/local/<site>.config \
+    --cram <results>/inputs/giab_sup/HG002.30x.haplotagged.cram --karyotype XY --reps 3
+```
+Caveats: fixed costs (start-up, model loading) weigh more on one chromosome than genome-wide; LongTR's
+`--max-tr-len` comes from the catalog it is given, so on chr20 it is chr20's longest locus.
+
 ## Reproduction targets
 - Pathogenic loci (paper Fig. 6): `scripts/pathogenic_results.{default,min_reads}.tsv` hold the per-sample,
   per-tool allele lengths and sequences, so this part can be reproduced call by call (data: SRA PRJNA786382).

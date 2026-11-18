@@ -27,7 +27,6 @@ params.threads    = 1          // the paper timed every tool single-threaded
 params.catalog_dir = "${projectDir}/catalogs"
 params.catalog    = 'benchmark-catalog-v2'
 params.mosdepth   = false
-params.samtools_container = 'quay.io/biocontainers/samtools:1.22.1--h96c455f_0'
 
 def die(msg) { error(msg) }
 
@@ -45,12 +44,7 @@ def outFor = { String tool -> "${params.outdir}/${params.mode}/${tool}/${params.
 def cat = { String suffix -> "${params.catalog_dir}/${params.catalog}.${suffix}" }
 def sensitive = params.mode == 'sensitive'
 
-// exported in tool scripts that need the cache; fails the task if htslib still could not decode CRAM slices,
-// because some tools (vamos) exit 0 with an empty result in that case
-def refEnv = 'export REF_PATH="$PWD/ref_cache/%2s/%2s/%s"; export REF_CACHE="$REF_PATH"'
-// (the tool's stderr goes to tool.err first, then to the task log, so the check does not race the log writer)
-def toolErr = '2> tool.err || { cat tool.err >&2; exit 1; }'
-def decodeCheck = 'cat tool.err >&2; if grep -q "Failure to decode slice\\|Unable to fetch reference" tool.err; then echo "CRAM decoding failed (reference not found)" >&2; exit 1; fi'
+include { ref_cache } from './modules/ref_cache.nf'
 
 def sampleName = { aln ->
     aln.name.replaceFirst(/\.(cram|bam)$/, '').replaceFirst(/\.merged$/, '')
@@ -101,34 +95,6 @@ workflow {
 
 /* -------------------------------------------------------------------------- */
 
-// htslib reference cache (REF_PATH layout %2s/%2s/%s): MD5 of each upper-cased sequence, as in the @SQ M5 tags
-process ref_cache {
-    container params.samtools_container
-    cpus 1
-    memory 4.GB
-    storeDir "${params.outdir}/ref_cache"
-
-    input:
-    path ref
-    path fai
-
-    output:
-    path 'ref_cache'
-
-    script:
-    """
-    set -euo pipefail
-    mkdir -p tmp_cache
-    cut -f1 ${fai} | while read -r ctg; do
-        samtools faidx ${ref} "\$ctg" | tail -n +2 | tr -d '\\n' | tr a-z A-Z > seq
-        m=\$(md5sum seq | cut -c1-32)
-        mkdir -p tmp_cache/\${m:0:2}/\${m:2:2}
-        mv seq tmp_cache/\${m:0:2}/\${m:2:2}/\${m:4}
-    done
-    mv tmp_cache ref_cache
-    """
-}
-
 process mosdepth {
     container params.tool_versions.mosdepth.container
     cpus 4
@@ -168,12 +134,7 @@ process atarva {
     path "${sample}.atarva.vcf"
 
     script:
-    def extra = sensitive ? '--min-reads 1' : ''
-    """
-    ${refEnv}
-    ${params.tool_versions.atarva.cmd} -t ${task.cpus} -f ${ref} -b ${aln} -r ${catalog} --format cram ${extra} --karyotype ${karyotype} -o ${sample}.atarva.vcf ${toolErr}
-    ${decodeCheck}
-    """
+    TrCommands.script('atarva', params.tool_versions.atarva, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 process longtr {
@@ -193,21 +154,7 @@ process longtr {
     path "${sample}.longTR.vcf.gz"
 
     script:
-    def alignment_params = [-1.0, -0.458675, -1.0, -0.458675, -0.00005800168, -1, -1]
-    def haploid_args = (karyotype == 'XY') ? '--haploid-chrs chrX,chrY' : ''
-    def extra = sensitive ? "--min-reads 1 --min-mean-qual 1 --bam-samps ${sample} --bam-libs ${sample}" : ''
-    """
-    MAX_TR_LEN="\$(awk '{print \$3-\$2}' ${catalog} | sort -n | tail -n 1)"
-    LongTR \\
-        --alignment-params ${alignment_params.join(',')} \\
-        --fasta ${ref} \\
-        --max-tr-len \$MAX_TR_LEN \\
-        --regions ${catalog} \\
-        ${haploid_args} \\
-        ${extra} \\
-        --bams ${aln} \\
-        --tr-vcf ${sample}.longTR.vcf.gz
-    """
+    TrCommands.script('longtr', params.tool_versions.longtr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 process medaka {
@@ -227,11 +174,7 @@ process medaka {
     path "${sample}.medaka.vcf"     // a directory: medaka tandem writes several files, incl. medaka_to_ref.TR.vcf
 
     script:
-    def sex = (karyotype == 'XX') ? 'female' : 'male'
-    def extra = sensitive ? '--min_depth 1' : ''
-    """
-    medaka tandem ${aln} ${ref} ${catalog} ${sex} ${sample}.medaka.vcf --workers ${task.cpus} --sample_name ${sample} ${extra} --debug
-    """
+    TrCommands.script('medaka', params.tool_versions.medaka, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 process straglr {
@@ -251,11 +194,7 @@ process straglr {
     path "${sample}.vcf"
 
     script:
-    def sex = (karyotype == 'XX') ? 'f' : 'm'
-    def extra = sensitive ? '--min_support 1 --min_cluster_size 1 --max_num_clusters 2' : ''
-    """
-    ${params.tool_versions.straglr.cmd} ${aln} ${ref} ${sample} --loci ${catalog} --chroms 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y --sex ${sex} ${extra} --genotype_in_size --nprocs ${task.cpus}
-    """
+    TrCommands.script('straglr', params.tool_versions.straglr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 process strdust {
@@ -276,21 +215,7 @@ process strdust {
     path "${sample}.strdust.sorted.vcf"
 
     script:
-    def haploid = (karyotype == 'XY') ? '--haploid chrX,chrY' : ''
-    def extra = sensitive ? '--support 1' : ''
-    """
-    ${params.tool_versions.strdust.cmd} \\
-      -R ${catalog} ${params.tool_versions.strdust.unphased} ${extra} -t ${task.cpus} --sample ${sample} \\
-      ${haploid} ${ref} ${aln} > ${sample}.strdust.vcf
-
-    # same order as the original "sort -k1,1V -k2,2n" for chr1-22/X/Y/M (all the catalog has), written without
-    # -V because the STRdust 1.x container only has busybox sort
-    { grep '^#' ${sample}.strdust.vcf; \\
-      grep -v '^#' ${sample}.strdust.vcf \\
-        | awk -F '\\t' -v OFS='\\t' '{ c = \$1; sub(/^chr/, "", c); k = (c ~ /^[0-9]+\$/) ? sprintf("0%09d", c) : "1" c; print k, \$0 }' \\
-        | LC_ALL=C sort -t "\$(printf '\\t')" -k1,1 -k3,3n | cut -f2-; \\
-    } > ${sample}.strdust.sorted.vcf
-    """
+    TrCommands.script('strdust', params.tool_versions.strdust, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 process strkit {
@@ -310,14 +235,7 @@ process strkit {
     path "${sample}.strkit*.vcf"
 
     script:
-    if (sensitive)
-        """
-        strkit call ${aln} --min-reads 1 --ploidy ${karyotype} --sex-chr ${karyotype} --realign --ref ${ref} --loc ${catalog} --vcf ${sample}.strkit-min_read_1.vcf --processes ${task.cpus} --min-read-align-score 0.1
-        """
-    else
-        """
-        strkit call ${aln} --ploidy ${karyotype} --realign --sex-chr ${karyotype} --ref ${ref} --loc ${catalog} --vcf ${sample}.strkit.vcf --processes ${task.cpus}
-        """
+    TrCommands.script('strkit', params.tool_versions.strkit, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 // vamos 3.x (process 'vamos') and 2.1.7 (process 'vamos_old'): same command apart from -Z
@@ -340,11 +258,7 @@ process vamos {
     tuple val(sample), path("${sample}.vamos.vcf"), emit: raw
 
     script:
-    """
-    ${refEnv}
-    vamos --read -b ${aln} -r ${catalog} -s ${sample} -o ${sample}.vamos.vcf -S ${params.tool_versions[tool].extra} -t ${task.cpus} ${toolErr}
-    ${decodeCheck}
-    """
+    TrCommands.script('vamos', params.tool_versions[tool], [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 process vamos_old {
@@ -366,11 +280,7 @@ process vamos_old {
     tuple val(sample), path("${sample}.vamos.vcf"), emit: raw
 
     script:
-    """
-    ${refEnv}
-    vamos --read -b ${aln} -r ${catalog} -s ${sample} -o ${sample}.vamos.vcf -S ${params.tool_versions[tool].extra} -t ${task.cpus} ${toolErr}
-    ${decodeCheck}
-    """
+    TrCommands.script('vamos_old', params.tool_versions[tool], [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
 }
 
 // fix-vcf*.py needs pysam, which the vamos containers lack; split out so vamos timing stays clean
