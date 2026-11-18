@@ -30,7 +30,7 @@ params.chrom        = 'chr20'
 params.reps         = 3
 params.seed         = 42
 params.version_sets = 'paper,current'
-params.tools        = 'atarva,longtr,mahimahi,medaka,straglr,strdust,strkit,vamos'
+params.tools        = 'atarva,inquistr,longtr,mahimahi,medaka,straglr,strdust,strkit,vamos'
 // timed in every session, to compare sessions: a tool version that never changes (sessions are only comparable
 // when the anchor's time is stable; otherwise its ratio shows by how much a session ran slower or faster)
 params.anchor       = 'longtr:paper'
@@ -100,8 +100,8 @@ workflow {
 
     sub = subset_cram(cram, crai, ref, fai)
     // all tools' catalogs, whatever this session runs: the stored chr20 catalogs are reused by later sessions
-    def allTools = ['atarva', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
-    catalogs = subset_catalogs(allTools.collect { file("${params.catalog_dir}/${params.catalog}.${TrCommands.catalogSuffix(it)}", checkIfExists: true) })
+    def allTools = ['atarva', 'inquistr', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
+    catalogs = subset_catalogs(allTools.collect { TrCommands.catalogSuffix(it) }.unique().collect { file("${params.catalog_dir}/${params.catalog}.${it}", checkIfExists: true) })   // inquiSTR shares STRdust's catalog
     refcache = ref_cache(ref, fai)
 
     timed(Channel.fromList(runs), sub, catalogs, ref, fai, refcache)
@@ -188,7 +188,7 @@ process timed {
     def catalog = "${catalogs}/${params.catalog}.${TrCommands.catalogSuffix(tool)}"
     def out = TrCommands.output(tool, sample, false)
     def cmd = TrCommands.script(tool, v, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: params.karyotype,
-                                          cpus: task.cpus, sensitive: false])
+                                          cpus: task.cpus, sensitive: false, haplotagged: true])
     """
     set -euo pipefail
     cat ${aln} ${idx} ${catalog} > /dev/null    # page cache: equal footing for every run

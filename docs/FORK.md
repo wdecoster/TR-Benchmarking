@@ -120,8 +120,27 @@ A tool is re-run when its **major or minor** version changes; patch releases are
 - Published: VCF, log and resolved config; the per-read TSV and tagged BAM stay in the work directory.
 - ONT developers are invited to check these choices.
 
+### inquiSTR 0.28.1 (version set `current`)
+**Conflict of interest:** inquiSTR is developed by the maintainer of this fork. It is run under the same rules as
+every other tool: its default settings, the same catalog loci, the same inputs and the same metrics. Its
+command is chosen to mirror the closest comparable tool (STRdust, same developer, same catalog file), and
+anything that departs from the defaults is listed here.
+- Container: the bioconda image `quay.io/biocontainers/inquistr:0.28.1--hdcf344f_0`.
+- Catalog: `catalogs/benchmark-catalog-v2.strdust.bed`. It has the same BED layout as STRdust's: a 0-based start,
+  the motif and the locus ID. inquiSTR keeps its default 10 bp padding around each locus.
+- Settings, all visible in `lib/TrCommands.groovy`:
+  - phased mode (HP tags), inquiSTR's default. With `--haplotagged false` (e.g. the pathogenic panel) it runs
+    with `--unphased`, because inquiSTR stops on input without HP tags. The paper ran STRdust with `--unphased`
+    even on haplotagged data; that choice is kept for STRdust to reproduce the paper;
+  - `--haploid chrX,chrY` for XY samples, as for STRdust;
+  - sensitive mode: `--support 1`, as for STRdust;
+  - `--reference` for CRAM decoding (no ref cache needed); the decode check still applies.
+- Output is length-only. Alleles are symbolic (`<STR>`); lengths are in `FORMAT/FRB` (full allele length in bp)
+  and `FORMAT/RB` (relative to the reference). Metrics that need allele sequences (e.g. edit distance) do not
+  apply to inquiSTR and are reported as not available, not as zero.
+
 ## Planned tools
-- [inquiSTR](https://github.com/wdecoster/inquiSTR)
+None at the moment. Suggestions are welcome as issues.
 
 ## Known gaps in reproducing the paper
 See the issues in this fork. In short: the paper does not state hac vs sup basecalls for GIAB or the exact

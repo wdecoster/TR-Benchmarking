@@ -27,7 +27,7 @@ params.threads    = 1          // the paper timed every tool single-threaded
 params.catalog_dir = "${projectDir}/catalogs"
 params.catalog    = 'benchmark-catalog-v2'
 params.mosdepth   = false
-params.haplotagged = true     // input reads carry HP/PS tags (GIAB EPI2ME CRAMs); false for the pathogenic panel (mahi-mahi)
+params.haplotagged = true     // input reads carry HP/PS tags (GIAB EPI2ME CRAMs); false for the pathogenic panel (mahi-mahi, inquiSTR)
 
 def die(msg) { error(msg) }
 
@@ -36,7 +36,7 @@ if (!(params.mode in ['default', 'sensitive'])) die("--mode must be 'default' or
 if (!params.version_set) die("choose a version profile: -profile ...,paper or ...,current")
 
 def selected = params.tools.tokenize(',')*.trim()
-def known = ['atarva', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos', 'vamos_old']
+def known = ['atarva', 'inquistr', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos', 'vamos_old']
 selected.each { if (!(it in known)) die("unknown tool '${it}' (known: ${known.join(',')})") }
 selected.each { if (!params.tool_versions.containsKey(it)) die("tool '${it}' has no entry in version set '${params.version_set}'") }
 
@@ -79,6 +79,7 @@ workflow {
 
     if (params.mosdepth) mosdepth(samples, ref, fai)
     if ('atarva' in selected)    atarva(samples, ref, fai, file(cat('atarva.bed.gz')), file(cat('atarva.bed.gz.tbi')), refcache)
+    if ('inquistr' in selected)  inquistr(samples, ref, fai, file(cat('strdust.bed')))
     if ('longtr' in selected)    longtr(samples, ref, fai, file(cat('longtr.bed')))
     if ('mahimahi' in selected)  mahimahi(samples, ref, fai, file(cat('mahimahi.bed')), refcache)
     if ('medaka' in selected)    medaka(samples, ref, fai, file(cat('medaka.bed')))
@@ -157,6 +158,26 @@ process longtr {
 
     script:
     TrCommands.script('longtr', params.tool_versions.longtr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
+}
+
+process inquistr {
+    tag "${sample}"
+    container params.tool_versions.inquistr.container
+    cpus params.threads
+    memory { 16.GB * task.attempt }
+    publishDir outFor('inquistr'), mode: 'copy'
+
+    input:
+    tuple val(sample), path(aln), path(idx), val(karyotype)
+    path ref
+    path fai
+    path catalog
+
+    output:
+    path "${sample}.inquistr.vcf"
+
+    script:
+    TrCommands.script('inquistr', params.tool_versions.inquistr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive, haplotagged: params.haplotagged as boolean])
 }
 
 process mahimahi {
