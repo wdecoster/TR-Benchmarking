@@ -3,9 +3,10 @@
  * single process), so the benchmark and the timing runs execute exactly the same commands.
  *
  *   script(tool, v, a)
- *     tool: atarva, longtr, medaka, straglr, strdust, strkit, vamos, vamos_old
+ *     tool: atarva, longtr, mahimahi, medaka, straglr, strdust, strkit, vamos, vamos_old
  *     v:    the tool's entry in params.tool_versions (version, container, cmd, unphased, extra, ...)
- *     a:    sample, aln, ref, catalog, karyotype (XX/XY), cpus, sensitive (boolean)
+ *     a:    sample, aln, ref, catalog, karyotype (XX/XY), cpus, sensitive (boolean),
+ *           haplotagged (boolean, default true; mahi-mahi refuses reads without HP/PS tags unless told otherwise)
  *
  * Commands of ATaRVa and vamos read the CRAM through an htslib reference cache in ./ref_cache (REF_PATH) and fail
  * when htslib still could not decode CRAM slices: vamos exits 0 with an empty VCF in that case.
@@ -18,13 +19,14 @@ class TrCommands {
     static final String DECODE_CHECK = 'cat tool.err >&2; if grep -q "Failure to decode slice\\|Unable to fetch reference" tool.err; then echo "CRAM decoding failed (reference not found)" >&2; exit 1; fi'
 
     // which tools need ./ref_cache staged in the task directory
-    static final List<String> NEEDS_REF_CACHE = ['atarva', 'vamos', 'vamos_old']
+    static final List<String> NEEDS_REF_CACHE = ['atarva', 'mahimahi', 'vamos', 'vamos_old']
 
     // main output file (or directory) per tool, relative to the task directory
     static String output(String tool, String sample, boolean sensitive) {
         switch (tool) {
             case 'atarva':  return "${sample}.atarva.vcf"
             case 'longtr':  return "${sample}.longTR.vcf.gz"
+            case 'mahimahi': return "${sample}.mahimahi/${sample}.vcf"
             case 'medaka':  return "${sample}.medaka.vcf"
             case 'straglr': return "${sample}.vcf"
             case 'strdust': return "${sample}.strdust.sorted.vcf"
@@ -40,6 +42,7 @@ class TrCommands {
         switch (tool) {
             case 'atarva':  return 'atarva.bed.gz'
             case 'longtr':  return 'longtr.bed'
+            case 'mahimahi': return 'mahimahi.bed'
             case 'medaka':  return 'medaka.bed'
             case 'straglr': return 'strglr.bed'
             case 'strdust': return 'strdust.bed'
@@ -79,6 +82,22 @@ class TrCommands {
                 ${extra} \\
                 --bams ${aln} \\
                 --tr-vcf ${sample}.longTR.vcf.gz
+            """.stripIndent()
+
+        case 'mahimahi':
+            // - region_merge_distance 25: the catalog has loci 26 bp apart; with the default (50) mahi-mahi stops
+            //   ("loci within region_merge_distance but different repeat IDs") instead of genotyping them separately
+            // - no plots: one PDF per locus is meant for a few dozen loci, not tens of thousands
+            // - sensitive mode: the closest equivalent of the other tools' "min reads 1" (mahi-mahi keeps a fixed
+            //   minimum of 3 reads per cluster)
+            def extra = sensitive ? '--set min_region_coverage=1 --set min_read_support_per_allele=1' : ''
+            def haplotag = (a.haplotagged == null || a.haplotagged) ? '' : '--bypass-haplotag-check'
+            return """
+            ${REF_ENV}
+            mahi-mahi --cram ${aln} --ref ${ref} --loci ${catalog} --sample ${sample} --sex ${karyotype} -o ${sample}.mahimahi \\
+                --set region_merge_distance=25 --set generate_clustering_plots=false --set generate_motif_plots=false \\
+                --set generate_methylation_plots=false ${extra} ${haplotag} ${TOOL_ERR}
+            ${DECODE_CHECK}
             """.stripIndent()
 
         case 'medaka':

@@ -30,7 +30,7 @@ params.chrom        = 'chr20'
 params.reps         = 3
 params.seed         = 42
 params.version_sets = 'paper,current'
-params.tools        = 'atarva,longtr,medaka,straglr,strdust,strkit,vamos'
+params.tools        = 'atarva,longtr,mahimahi,medaka,straglr,strdust,strkit,vamos'
 // timed in every session, to compare sessions: a tool version that never changes (sessions are only comparable
 // when the anchor's time is stable; otherwise its ratio shows by how much a session ran slower or faster)
 params.anchor       = 'longtr:paper'
@@ -63,7 +63,7 @@ setNames.each { s ->
     def tv = loadSet(s)
     toolNames.each { t ->
         def v = tv[t]
-        if (!v) error("tool '${t}' has no entry in version set '${s}'")
+        if (!v) return          // tool not in this version set (e.g. mahi-mahi is not in 'paper')
         def key = "${t}\t${v.version}\t${v.container}".toString()   // String, not GString: GString keys do not match in a Map
         if (configs.containsKey(key)) configs[key].sets << s
         else configs[key] = [tool: t, v: v as Map, sets: [s]]
@@ -82,6 +82,8 @@ if (params.anchor) {
 // each session keeps its own table: timings of tool versions that are not re-run come from earlier sessions
 def session = new java.util.Date().format('yyyy-MM-dd_HH-mm')
 
+toolNames.each { t -> if (!configs.values().any { it.tool == t }) error("tool '${t}' is in none of the version sets ${setNames}") }
+
 def runs = []
 configs.values().each { c -> (1..(params.reps as int)).each { r -> runs << c + [rep: r] } }
 Collections.shuffle(runs, new Random(params.seed as long))
@@ -98,7 +100,7 @@ workflow {
 
     sub = subset_cram(cram, crai, ref, fai)
     // all tools' catalogs, whatever this session runs: the stored chr20 catalogs are reused by later sessions
-    def allTools = ['atarva', 'longtr', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
+    def allTools = ['atarva', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
     catalogs = subset_catalogs(allTools.collect { file("${params.catalog_dir}/${params.catalog}.${TrCommands.catalogSuffix(it)}", checkIfExists: true) })
     refcache = ref_cache(ref, fai)
 

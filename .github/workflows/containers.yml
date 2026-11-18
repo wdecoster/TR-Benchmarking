@@ -1,5 +1,5 @@
-# Builds the tool images that no registry provides in a working form (ATaRVa; medaka 2.1.1 with the pyabpoa it
-# requires) and pushes them to ghcr.io. For ATaRVa the date pins the dependency resolution to the day after the release.
+# Builds the tool images that no registry provides in a working form (ATaRVa; mahi-mahi; medaka 2.1.1 with the
+# pyabpoa it requires) and pushes them to ghcr.io. For ATaRVa the date pins the dependency resolution to the day after the release.
 name: containers
 on:
   workflow_dispatch:
@@ -59,3 +59,37 @@ jobs:
             PYTHON_VERSION=${{ matrix.python }}
           tags: ghcr.io/${{ github.repository_owner }}/medaka:${{ matrix.version }}
           push: true
+
+  mahimahi:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - version: '1.0.0'
+            exclude_newer: '2026-10-16T00:00:00Z'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: containers/mahimahi
+          build-args: |
+            MAHIMAHI_VERSION=${{ matrix.version }}
+            EXCLUDE_NEWER=${{ matrix.exclude_newer }}
+          tags: ghcr.io/${{ github.repository_owner }}/mahimahi:${{ matrix.version }}
+          load: true
+          push: false
+      # ONT's install check (one HG002 locus, output must be identical to the expected VCF) before pushing
+      - name: install check
+        run: |
+          v=${{ matrix.version }}
+          curl -fsSLO https://github.com/nanoporetech/mahi-mahi/releases/download/v$v/mahi-mahi-hg002-chr18-tcf4-v$v.tar.gz
+          tar -xzf mahi-mahi-hg002-chr18-tcf4-v$v.tar.gz
+          docker run --rm -u $(id -u):$(id -g) -v "$PWD/mahi-mahi-hg002-chr18-tcf4:/check" -w /check \
+              ghcr.io/${{ github.repository_owner }}/mahimahi:$v bash ./verify-mahi-mahi-installation.sh | tee check.log
+          grep -q '^PASS: mahi-mahi install check completed successfully.' check.log
+      - run: docker push ghcr.io/${{ github.repository_owner }}/mahimahi:${{ matrix.version }}

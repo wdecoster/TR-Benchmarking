@@ -27,6 +27,7 @@ params.threads    = 1          // the paper timed every tool single-threaded
 params.catalog_dir = "${projectDir}/catalogs"
 params.catalog    = 'benchmark-catalog-v2'
 params.mosdepth   = false
+params.haplotagged = true     // input reads carry HP/PS tags (GIAB EPI2ME CRAMs); false for the pathogenic panel (mahi-mahi)
 
 def die(msg) { error(msg) }
 
@@ -35,7 +36,7 @@ if (!(params.mode in ['default', 'sensitive'])) die("--mode must be 'default' or
 if (!params.version_set) die("choose a version profile: -profile ...,paper or ...,current")
 
 def selected = params.tools.tokenize(',')*.trim()
-def known = ['atarva', 'longtr', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos', 'vamos_old']
+def known = ['atarva', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos', 'vamos_old']
 selected.each { if (!(it in known)) die("unknown tool '${it}' (known: ${known.join(',')})") }
 selected.each { if (!params.tool_versions.containsKey(it)) die("tool '${it}' has no entry in version set '${params.version_set}'") }
 
@@ -74,11 +75,12 @@ workflow {
 
     // Tools that do not pass the FASTA to htslib as the CRAM reference (vamos takes no FASTA; ATaRVa 0.7) find the
     // reference through REF_PATH: an MD5-keyed cache of the same FASTA (the input CRAMs carry no UR tags).
-    refcache = (selected.any { it in ['atarva', 'vamos', 'vamos_old'] }) ? ref_cache(ref, fai) : null
+    refcache = (selected.any { it in TrCommands.NEEDS_REF_CACHE }) ? ref_cache(ref, fai) : null
 
     if (params.mosdepth) mosdepth(samples, ref, fai)
     if ('atarva' in selected)    atarva(samples, ref, fai, file(cat('atarva.bed.gz')), file(cat('atarva.bed.gz.tbi')), refcache)
     if ('longtr' in selected)    longtr(samples, ref, fai, file(cat('longtr.bed')))
+    if ('mahimahi' in selected)  mahimahi(samples, ref, fai, file(cat('mahimahi.bed')), refcache)
     if ('medaka' in selected)    medaka(samples, ref, fai, file(cat('medaka.bed')))
     if ('straglr' in selected)   straglr(samples, ref, fai, file(cat('strglr.bed')))
     if ('strdust' in selected)   strdust(samples, ref, fai, file(cat('strdust.bed')))
@@ -155,6 +157,28 @@ process longtr {
 
     script:
     TrCommands.script('longtr', params.tool_versions.longtr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
+}
+
+process mahimahi {
+    tag "${sample}"
+    container params.tool_versions.mahimahi.container
+    cpus 1          // mahi-mahi is single-threaded
+    memory { 32.GB * task.attempt }
+    publishDir outFor('mahimahi'), mode: 'copy'
+
+    input:
+    tuple val(sample), path(aln), path(idx), val(karyotype)
+    path ref
+    path fai
+    path catalog
+    path refcache
+
+    output:
+    // the VCF, run log and resolved config; the per-read TSV and tagged BAM stay in the work directory
+    path "${sample}.mahimahi/${sample}.{vcf,log,config.yaml}"
+
+    script:
+    TrCommands.script('mahimahi', params.tool_versions.mahimahi, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive, haplotagged: params.haplotagged as boolean])
 }
 
 process medaka {
