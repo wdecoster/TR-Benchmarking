@@ -31,9 +31,13 @@ params.reps         = 3
 params.seed         = 42
 params.version_sets = 'paper,current'
 params.tools        = 'atarva,longtr,medaka,straglr,strdust,strkit,vamos'
+// timed in every session, to compare sessions: a tool version that never changes (sessions are only comparable
+// when the anchor's time is stable; otherwise its ratio shows by how much a session ran slower or faster)
+params.anchor       = 'longtr:paper'
 params.threads      = 1
 params.catalog_dir  = "${projectDir}/catalogs"
 params.catalog      = 'benchmark-catalog-v2'
+params.samtools_container = 'quay.io/biocontainers/samtools:1.22.1--h96c455f_0'
 
 include { ref_cache } from './modules/ref_cache.nf'
 
@@ -66,6 +70,18 @@ setNames.each { s ->
     }
 }
 
+// the anchor (tool:version_set), added unless already part of this session
+if (params.anchor) {
+    def (at, aset) = params.anchor.tokenize(':')
+    def v = loadSet(aset)[at]
+    if (!v) error("anchor '${params.anchor}': no such tool in version set '${aset}'")
+    def key = "${at}\t${v.version}\t${v.container}".toString()
+    if (!configs.containsKey(key)) configs[key] = [tool: at, v: v as Map, sets: ['anchor']]
+}
+
+// each session keeps its own table: timings of tool versions that are not re-run come from earlier sessions
+def session = new java.util.Date().format('yyyy-MM-dd_HH-mm')
+
 def runs = []
 configs.values().each { c -> (1..(params.reps as int)).each { r -> runs << c + [rep: r] } }
 Collections.shuffle(runs, new Random(params.seed as long))
@@ -81,11 +97,13 @@ workflow {
     runs.each { log.info "  ${it[0]}\t${it[1]} ${it[2]} (${it[3]}) rep ${it[4]}" }
 
     sub = subset_cram(cram, crai, ref, fai)
-    catalogs = subset_catalogs(toolNames.collect { file("${params.catalog_dir}/${params.catalog}.${TrCommands.catalogSuffix(it)}", checkIfExists: true) })
+    // all tools' catalogs, whatever this session runs: the stored chr20 catalogs are reused by later sessions
+    def allTools = ['atarva', 'longtr', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
+    catalogs = subset_catalogs(allTools.collect { file("${params.catalog_dir}/${params.catalog}.${TrCommands.catalogSuffix(it)}", checkIfExists: true) })
     refcache = ref_cache(ref, fai)
 
     timed(Channel.fromList(runs), sub, catalogs, ref, fai, refcache)
-        .collectFile(name: "timing_${params.chrom}.tsv", storeDir: "${params.outdir}/timing", sort: { it.text.tokenize('\t')[0] as int },
+        .collectFile(name: "timing_${params.chrom}_${session}.tsv", storeDir: "${params.outdir}/timing", sort: { it.text.tokenize('\t')[0] as int },
                      seed: "order\ttool\tversion\tsets\trep\tstart_epoch\twall_s\tload_start\tload_end\tcalls_md5\n")
 }
 

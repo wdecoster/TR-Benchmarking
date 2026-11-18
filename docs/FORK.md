@@ -84,6 +84,11 @@ measures them more carefully on a small subset:
 nextflow run timing.nf -profile local -c conf/local/<site>.config \
     --cram <results>/inputs/giab_sup/HG002.30x.haplotagged.cram --karyotype XY --reps 3
 ```
+Incremental: like the genotyping, only new tool versions are timed (`--version_sets current --tools <changed>`);
+earlier timings are reused. Every session writes its own table (`timing_chr20_<date>.tsv`) and always also times an
+**anchor** (`--anchor longtr:paper`, a version that never changes): sessions are comparable only when the anchor's
+time is stable, and its ratio between sessions shows how much faster or slower a session ran.
+
 Caveats: fixed costs (start-up, model loading) weigh more on one chromosome than genome-wide; LongTR's
 `--max-tr-len` comes from the catalog it is given, so on chr20 it is chr20's longest locus.
 
