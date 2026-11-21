@@ -106,7 +106,7 @@ A tool is re-run when its **major or minor** version changes; patch releases are
   dependencies as of the release date; CI runs ONT's install check (one HG002 locus, byte-identical VCF) before
   pushing. License: ONT Public License v1.0 (research use with nanopore data), included in the image.
 - Catalog: `catalogs/benchmark-catalog-v2.mahimahi.bed` (`scripts/make_mahimahi_catalog.sh`, from the medaka
-  catalog: same loci and coordinates, repeat_id = variant_id = locus ID).
+  catalog: same coordinates, repeat_id = variant_id = locus ID; without the 1 bp motifs, see below).
 - Settings, all visible in `lib/TrCommands.groovy`:
   - `region_merge_distance=25`: the catalog has loci 26 bp apart; with the default (50) mahi-mahi stops with an
     error rather than genotype them separately;
@@ -114,6 +114,9 @@ A tool is re-run when its **major or minor** version changes; patch releases are
   - sensitive mode: `min_region_coverage=1`, `min_read_support_per_allele=1` (closest equivalent of the other
     tools' "min reads 1"; mahi-mahi keeps a fixed minimum of 3 reads per cluster);
   - `--bypass-haplotag-check` only for input without haplotags (`--haplotagged false`, e.g. the pathogenic panel).
+- Homopolymers: mahi-mahi refuses single-base motifs ("Single-base motifs are not supported", checked before any
+  genotyping, one such locus stops the whole run). The 1,000 loci with a 1 bp motif are therefore left out of its
+  catalog (42,009 loci) and count as "not supported" for mahi-mahi, not as failed calls or zeros.
 - Scope: mahi-mahi is designed for STRs and states it is not suited to long-motif TRs; 36,940 of the 43,009
   catalog loci have a motif longer than 6 bp. It is run on the full catalog like every tool; results should be
   read per motif-length class (the catalog has ~1,000 loci for each motif length 1-6 bp).
