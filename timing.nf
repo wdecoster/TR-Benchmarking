@@ -11,7 +11,7 @@ nextflow.enable.dsl = 2
  *
  * The commands are those of main.nf (lib/TrCommands.groovy), single-threaded like the paper's timing runs, on the
  * input CRAM and catalog restricted to --chrom. Each task first reads its inputs once (page cache) so the timing is
- * not dominated by cold reads. Recorded per run: wall time of the tool command itself (date, inside the
+ * not dominated by cold reads. Recorded per run: wall time of the tool command itself (/proc/uptime, inside the
  * container), and in the Nextflow trace realtime, %cpu and peak RSS; the load average at start and end; a digest of
  * the calls (VCF records without the header) to check that replicates give identical output.
  *
@@ -193,13 +193,14 @@ process timed {
     set -euo pipefail
     cat ${aln} ${idx} ${catalog} > /dev/null    # page cache: equal footing for every run
     load_start=\$(cut -d' ' -f1-3 /proc/loadavg)
-    t0=\$(date +%s.%N)
+    start=\$(date +%s)
+    t0=\$(cut -d' ' -f1 /proc/uptime)    # 10 ms resolution in every container (busybox date has no %N)
     ${cmd}
-    t1=\$(date +%s.%N)
+    t1=\$(cut -d' ' -f1 /proc/uptime)
     load_end=\$(cut -d' ' -f1-3 /proc/loadavg)
     calls() { if [ -d "\$1" ]; then cat "\$1"/*.vcf; elif [ "\${1%.gz}" != "\$1" ]; then zcat "\$1"; else cat "\$1"; fi; }
     md5=\$(calls ${out} | grep -v '^#' | md5sum | cut -c1-32)
     wall=\$(awk -v a=\$t0 -v b=\$t1 'BEGIN { printf "%.1f", b - a }')
-    printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' ${order} ${tool} ${version} ${in_sets} ${rep} \$t0 \$wall "\$load_start" "\$load_end" \$md5 > timing.tsv
+    printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' ${order} ${tool} ${version} ${in_sets} ${rep} \$start \$wall "\$load_start" "\$load_end" \$md5 > timing.tsv
     """
 }
