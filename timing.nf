@@ -13,7 +13,9 @@ nextflow.enable.dsl = 2
  * input CRAM and catalog restricted to --chrom. Each task first reads its inputs once (page cache) so the timing is
  * not dominated by cold reads. Recorded per run: wall time of the tool command itself (/proc/uptime, inside the
  * container), and in the Nextflow trace realtime, %cpu and peak RSS; the load average at start and end; a digest of
- * the calls (VCF records without the header) to check that replicates give identical output.
+ * the calls (VCF records without the header) to check that replicates give identical output; the calls
+ * themselves are kept (timing/calls/calls_<session>_<order>_<tool>_<version>_rep<N>.tsv.gz) to measure how much
+ * replicates differ when they are not identical.
  *
  * Caveat: LongTR's --max-tr-len is taken from the catalog it is given, as in main.nf, so on one chromosome it is
  * that chromosome's longest locus.
@@ -104,7 +106,7 @@ workflow {
     catalogs = subset_catalogs(allTools.collect { TrCommands.catalogSuffix(it) }.unique().collect { file("${params.catalog_dir}/${params.catalog}.${it}", checkIfExists: true) })   // inquiSTR shares STRdust's catalog
     refcache = ref_cache(ref, fai)
 
-    timed(Channel.fromList(runs), sub, catalogs, ref, fai, refcache)
+    timed(Channel.fromList(runs), sub, catalogs, ref, fai, refcache).row
         .collectFile(name: "timing_${params.chrom}_${session}.tsv", storeDir: "${params.outdir}/timing", sort: { it.text.tokenize('\t')[0] as int },
                      seed: "order\ttool\tversion\tsets\trep\tstart_epoch\twall_s\tload_start\tload_end\tcalls_md5\n")
 }
@@ -171,6 +173,7 @@ process timed {
     memory { tool == 'straglr' ? 80.GB : 32.GB }
     maxForks 1                  // one run at a time
     errorStrategy 'terminate'   // no retries: a retry would break the order and double-count load
+    publishDir "${params.outdir}/timing/calls", pattern: 'calls_*.gz', mode: 'copy'   // replicate agreement is computed from these
 
     input:
     tuple val(order), val(tool), val(version), val(in_sets), val(rep), val(image), val(v)
@@ -181,10 +184,12 @@ process timed {
     path refcache
 
     output:
-    path 'timing.tsv'
+    path 'timing.tsv', emit: row
+    path 'calls_*.gz', emit: calls
 
     script:
     def sample = aln.baseName
+    def callsFile = "calls_${session}_${order}_${tool}_${version}_rep${rep}.tsv.gz"
     def catalog = "${catalogs}/${params.catalog}.${TrCommands.catalogSuffix(tool)}"
     def out = TrCommands.output(tool, sample, false)
     def cmd = TrCommands.script(tool, v, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: params.karyotype,
@@ -199,7 +204,9 @@ process timed {
     t1=\$(cut -d' ' -f1 /proc/uptime)
     load_end=\$(cut -d' ' -f1-3 /proc/loadavg)
     calls() { if [ -d "\$1" ]; then cat "\$1"/*.vcf; elif [ "\${1%.gz}" != "\$1" ]; then zcat "\$1"; else cat "\$1"; fi; }
-    md5=\$(calls ${out} | grep -v '^#' | md5sum | cut -c1-32)
+    calls ${out} | grep -v '^#' > calls.tsv
+    md5=\$(md5sum < calls.tsv | cut -c1-32)
+    gzip -c calls.tsv > ${callsFile}
     wall=\$(awk -v a=\$t0 -v b=\$t1 'BEGIN { printf "%.1f", b - a }')
     printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' ${order} ${tool} ${version} ${in_sets} ${rep} \$start \$wall "\$load_start" "\$load_end" \$md5 > timing.tsv
     """
