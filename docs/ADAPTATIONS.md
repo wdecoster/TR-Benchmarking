@@ -40,6 +40,8 @@ Where a change affects results the effect is stated if known, otherwise "not mea
 | ID | What we did | Why |
 |---|---|---|
 | A-eval-1 | Timings from `timing.nf`: one chromosome (chr20), single-threaded, one run at a time in shuffled order, with an anchor tool to compare sessions. | A controlled measurement on a shared machine; genome-wide runs are single measurements under varying load. Fixed costs weigh more on a small subset. |
+| A-eval-3 | Truth: the T2T HG002 v1.1 assembly (maternal and paternal haplotypes) aligned to GRCh38 with `minimap2 -ax asm5 --secondary=no`; allele lengths per catalog locus as in the paper's `assembly_concordance.py` (contigs with MAPQ >= 5 spanning the locus, all must agree; diploid loci need both haplotypes). | The paper only says "asm5"; the other options are not given. Details in `prepare/prepare_truth.nf`. |
+| A-eval-4 | All metrics are computed on allele **lengths** for every tool. Where a tool gives no length field, it is derived: STRdust 0.16 `QUICKREF` records (GT 0\|0, no lengths) count as the reference length; vamos' `.fixed.vcf` has a REF one base shorter than the catalog interval, so the ALT sequence length is used; mahi-mahi writes one value for a homozygous call; a call with one allele missing counts as no call (as in the paper's script). | inquiSTR and straglr report lengths only, so one length-based path is needed for all. | 
 | A-eval-2 | Results are reported by motif-length class (1–6 bp and > 6 bp). | The catalog is a stratified sample of isolated loci with about 1,000 loci per motif length; most loci have motifs > 6 bp, which not every tool is designed for. |
 
 ## Not changed
