@@ -103,7 +103,8 @@ Caveats: fixed costs (start-up, model loading) weigh more on one chromosome than
 - Timing (Fig. 1): relative between tools only, since the hardware differs.
 
 ## Re-run rule
-A tool is re-run when its **major or minor** version changes; patch releases are not re-run.
+A tool is re-run when its **major or minor** version changes; patch releases are not re-run, unless the patch changes
+results and its developer says so (STRdust 1.4.2, ADAPTATIONS A-strdust-3).
 
 ## Tools added after the paper
 ### mahi-mahi 1.0.0 (Oxford Nanopore, version set `current`)

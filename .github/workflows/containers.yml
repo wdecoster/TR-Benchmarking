@@ -1,4 +1,4 @@
-# Builds the tool images that no registry provides in a working form (ATaRVa; mahi-mahi; inquiSTR releases without a
+# Builds the tool images that no registry provides in a working form (ATaRVa; mahi-mahi; inquiSTR and STRdust releases without a
 # bioconda image yet; medaka 2.1.1 with the
 # pyabpoa it requires) and pushes them to ghcr.io. For ATaRVa the date pins the dependency resolution to the day after the release.
 name: containers
@@ -64,6 +64,29 @@ jobs:
             PYABPOA_VERSION=${{ matrix.pyabpoa }}
             PYTHON_VERSION=${{ matrix.python }}
           tags: ghcr.io/${{ github.repository_owner }}/medaka:${{ matrix.tag }}
+          push: true
+
+  strdust:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - version: '1.4.2'
+            sha256: 'f6c185444345cc64035555fbbfba3fd47be30eaec605c895985b44e92ca66740'    # STRdust-linux-musl of the v1.4.2 release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: containers/strdust
+          build-args: |
+            STRDUST_VERSION=${{ matrix.version }}
+            STRDUST_SHA256=${{ matrix.sha256 }}
+          tags: ghcr.io/${{ github.repository_owner }}/strdust:${{ matrix.version }}
           push: true
 
   inquistr:
