@@ -82,7 +82,7 @@ workflow {
     if ('inquistr' in selected)  inquistr(samples, ref, fai, file(cat('strdust.bed')))
     if ('longtr' in selected)    longtr(samples, ref, fai, file(cat('longtr.bed')))
     if ('mahimahi' in selected)  mahimahi(samples, ref, fai, file(cat('mahimahi.bed')), refcache)
-    if ('medaka' in selected)    medaka(samples, ref, fai, file(cat('medaka.bed')))
+    if ('medaka' in selected)    medaka(samples, ref, fai, file(cat('medaka.bed')), refcache)
     if ('straglr' in selected)   straglr(samples, ref, fai, file(cat('strglr.bed')))
     if ('strdust' in selected)   strdust(samples, ref, fai, file(cat('strdust.bed')))
     if ('strkit' in selected)    strkit(samples, ref, fai, file(cat('strkit.bed')))
@@ -214,6 +214,7 @@ process medaka {
     path ref
     path fai
     path catalog
+    path refcache
 
     output:
     path "${sample}.medaka.vcf"     // a directory: medaka tandem writes several files, incl. medaka_to_ref.TR.vcf

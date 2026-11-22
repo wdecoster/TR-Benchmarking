@@ -19,7 +19,7 @@ class TrCommands {
     static final String DECODE_CHECK = 'cat tool.err >&2; if grep -q "Failure to decode slice\\|Unable to fetch reference" tool.err; then echo "CRAM decoding failed (reference not found)" >&2; exit 1; fi'
 
     // which tools need ./ref_cache staged in the task directory
-    static final List<String> NEEDS_REF_CACHE = ['atarva', 'mahimahi', 'vamos', 'vamos_old']
+    static final List<String> NEEDS_REF_CACHE = ['atarva', 'mahimahi', 'medaka', 'vamos', 'vamos_old']
 
     // main output file (or directory) per tool, relative to the task directory
     static String output(String tool, String sample, boolean sensitive) {
@@ -119,8 +119,12 @@ class TrCommands {
         case 'medaka':
             def sex = (karyotype == 'XX') ? 'female' : 'male'
             def extra = sensitive ? '--min_depth 1' : ''
+            // medaka 2.1.1 (own image) cannot find the reference of a UR-less CRAM by itself: it then skips every locus
+            // ("Retrieved too few reads (0 < 3)") and still exits 0. Hence the reference cache and the decode check.
             return """
-            medaka tandem ${aln} ${ref} ${catalog} ${sex} ${sample}.medaka.vcf --workers ${cpus} --sample_name ${sample} ${extra} --debug
+            ${REF_ENV}
+            medaka tandem ${aln} ${ref} ${catalog} ${sex} ${sample}.medaka.vcf --workers ${cpus} --sample_name ${sample} ${extra} --debug ${TOOL_ERR}
+            ${DECODE_CHECK}
             """.stripIndent()
 
         case 'straglr':
