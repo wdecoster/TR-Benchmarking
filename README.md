@@ -3,6 +3,11 @@
 > **Fork** of [dashnowlab/TR-Benchmarking](https://github.com/dashnowlab/TR-Benchmarking) that reproduces and
 > keeps updating the benchmark of Aliyev et al. 2026. See [docs/FORK.md](docs/FORK.md) for what changed and how to run it.
 
+> **Tool developers: please tell us how to run your tool better.** We want every tool run the way its developers
+> would run it. Every change we made to get a tool running is listed in [docs/ADAPTATIONS.md](docs/ADAPTATIONS.md);
+> how to suggest improvements (and what happens with them) is in [docs/DEVELOPERS.md](docs/DEVELOPERS.md).
+> [Open an issue](../../issues/new/choose); suggestions are welcome even if they change how your tool looks.
+
 Tandem repeat benchmarking project.
 
 ## Run Nextflow

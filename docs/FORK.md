@@ -12,7 +12,8 @@ Aims:
 Maintained by Wouter De Coster, a co-author of the paper and the developer of STRdust and inquiSTR, two of the
 benchmarked tools. To keep that conflict of interest manageable, everything is public: the code, the exact
 command for every tool, run logs and results. The same rules apply to every tool. **Tool developers are explicitly
-invited to open issues or PRs** to improve how their tool is run (parameters, catalog conversion, output parsing).
+encouraged to tell us how to do better with their tool** (parameters, catalog conversion, output parsing, version, how it is
+reported): see [DEVELOPERS.md](DEVELOPERS.md). Suggestions are discussed in the open, rerun, and published next to the earlier result.
 
 Every change made to get a tool running is listed, with reasons, in **[ADAPTATIONS.md](ADAPTATIONS.md)**; developers
 are invited to comment on them.

@@ -5,7 +5,7 @@ format, a flag the tool requires. Each of those is a choice that can influence a
 choices the tool's developers might make differently. This page lists **every such change** in one place, with the
 reason and the evidence, so that tool developers and readers can check them and say so.
 
-**How to comment:** open an issue with the template "Comment on an adaptation" and give the ID. A change is removed
+**Developers, please comment: this is the place to tell us how to do better with your tool** (see [DEVELOPERS.md](DEVELOPERS.md)). **How to comment:** open an issue with the template "Comment on an adaptation" and give the ID. A change is removed
 or replaced when its developers (or anyone, with evidence) show a better option; the benchmark is then rerun for
 that tool and the change is recorded here. Maintainer's conflict of interest (STRdust, inquiSTR): see
 [FORK.md](FORK.md); the same list applies to every tool.
