@@ -89,11 +89,15 @@ def _gt(gt: str) -> Optional[List[Optional[int]]]:
     return [None if a == '.' else int(a) for a in gt.replace('|', '/').split('/')]
 
 
-def _ints(text: str) -> Optional[List[int]]:
-    try:
-        return [int(x) for x in text.split(',')]
-    except ValueError:
-        return None
+def _ints(text: str) -> List[Optional[int]]:
+    """Integers of a comma-separated field; anything else ('NaN', '.') is None."""
+    out = []
+    for x in text.split(','):
+        try:
+            out.append(int(x))
+        except ValueError:
+            out.append(None)
+    return out
 
 
 def _key(tool: str, rec, info: Dict[str, str]) -> str:
@@ -115,7 +119,7 @@ def _key(tool: str, rec, info: Dict[str, str]) -> str:
 
 
 def _from_alleles(rec, gt, cat_len, alt_is_full=False) -> List[Optional[int]]:
-    """Catalog length + (len(ALT) - len(REF)) of each called allele; symbolic or missing alleles give None.
+    """Catalog length + (len(ALT) - len(REF)) of each called allele; other symbolic or missing alleles give None; <DEL> and * give 0.
     With alt_is_full the ALT sequence length is the allele length (vamos, see read_calls)."""
     ref, alts = rec[3], rec[4].split(',') if rec[4] not in ('.', '') else []
     lengths = []
@@ -124,23 +128,37 @@ def _from_alleles(rec, gt, cat_len, alt_is_full=False) -> List[Optional[int]]:
             lengths.append(None)
         elif a == 0:
             lengths.append(cat_len)
-        elif a <= len(alts) and not alts[a - 1].startswith('<') and alts[a - 1] not in ('*', '.'):
+        elif a <= len(alts) and alts[a - 1] in ('<DEL>', '*'):
+            lengths.append(0)                       # deletion of the whole repeat array: an empty allele, as in the paper
+        elif a <= len(alts) and not alts[a - 1].startswith('<') and alts[a - 1] != '.':
             lengths.append(len(alts[a - 1]) if alt_is_full else cat_len + len(alts[a - 1]) - len(ref))
         else:
             lengths.append(None)
     return lengths
 
 
-def read_calls(tool: str, path: str, catalog: Dict[str, Locus]) -> Dict[str, Call]:
-    """Calls of one VCF, keyed by catalog locus ID. Records of loci that are not in the catalog are ignored."""
+HAPLOID_XY = ('chrX', 'chrY')
+
+
+def read_calls(tool: str, path: str, catalog: Dict[str, Locus], karyotype: str = 'XY') -> Dict[str, Call]:
+    """Calls of one VCF, keyed by catalog locus ID. Records of loci that are not in the catalog are ignored, but
+    at least half of the records must be in it (a different key scheme would otherwise read as "no calls").
+
+    On chrX and chrY of an XY sample only the first allele counts, for every tool, as in the paper's script
+    (`v.genotypes[0][:ploidy]`): tools that write two alleles there get no second chance. A call is a no-call when
+    a value that counts is missing (so inquiSTR's `200,NaN` is a valid haploid call, `NaN,NaN` and `200,NaN` on an
+    autosome are not).
+    """
     if tool not in TOOLS:
         raise ValueError(f'unknown tool {tool}')
     tool = 'inquistr' if tool == 'inquistr_unphased' else tool      # same output format
     calls: Dict[str, Call] = {}
+    n_rec = 0
     with _open(path) as fh:
         for line in fh:
             if line.startswith('#'):
                 continue
+            n_rec += 1
             rec = line.rstrip('\n').split('\t')
             info = _info(rec[7])
             key = _key(tool, rec, info)
@@ -149,16 +167,18 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus]) -> Dict[str, Cal
                 continue
             fmt = dict(zip(rec[8].split(':'), rec[9].split(':')))
             gt = _gt(fmt.get('GT', '.'))
-            flags = ''
-            if 'CLUSTERFAILURE' in rec[7]:
-                flags = 'CLUSTERFAILURE'
+            flags = []
+            for flag in ('CLUSTERFAILURE', 'QUICKREF'):
+                if flag in rec[7].split(';'):
+                    flags.append(flag)
+            if tool == 'mahimahi' and rec[6] not in ('PASS', '.'):
+                flags.append(rec[6])
+            flags = ','.join(flags)
             if gt is None:
                 calls[key] = Call(None, flags)
                 continue
             lengths: Optional[List[Optional[int]]]
             field = {'strdust': 'FRB', 'inquistr': 'FRB', 'atarva': 'AL', 'mahimahi': 'BPCN'}.get(tool)
-            if tool == 'mahimahi' and rec[6] not in ('PASS', '.'):
-                flags = rec[6]
             if field and field in fmt:
                 lengths = _ints(fmt[field])
             elif field:
@@ -166,8 +186,8 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus]) -> Dict[str, Cal
                 # reference allele, for loci it did not genotype in detail
                 lengths = _from_alleles(rec, gt, locus.length)
             elif tool == 'straglr':
-                rb = _ints(info['RB']) if 'RB' in info else []
-                table = [locus.length] + (rb or [])
+                rb = [x for x in _ints(info['RB']) if x is not None] if 'RB' in info else []
+                table = [locus.length] + rb
                 idx = gt * 2 if len(gt) == 1 else gt        # straglr writes a single index for a homozygous call
                 lengths = [table[i] if i is not None and i < len(table) else None for i in idx]
             else:
@@ -175,10 +195,14 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus]) -> Dict[str, Cal
                 # frame of the catalog interval: 96% of its lengths equal inquiSTR's with len(ALT), and none with
                 # the REF-relative length. To be confirmed against the assembly truth (a constant +-1 would show).
                 lengths = _from_alleles(rec, gt, locus.length, alt_is_full=(tool == 'vamos'))
-            if lengths is not None and len(lengths) == 1 and len(gt) == 2:
+            if tool == 'mahimahi' and len(lengths) == 1 and len(gt) == 2:
                 lengths = lengths * 2                   # mahi-mahi writes one value for a homozygous call
-            if lengths is None or any(x is None for x in lengths):
+            if karyotype == 'XY' and locus.chrom in HAPLOID_XY:
+                lengths = lengths[:1]
+            if not lengths or any(x is None for x in lengths):
                 calls[key] = Call(None, flags)
             else:
                 calls[key] = Call(list(lengths), flags)
+    if n_rec and len(calls) < n_rec / 2:
+        raise ValueError(f'{path}: only {len(calls)} of {n_rec} records are catalog loci for {tool}: wrong catalog or key scheme?')
     return calls

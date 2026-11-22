@@ -43,6 +43,8 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
     n_not_supported   loci the tool cannot take at all (mahi-mahi and 1 bp motifs): left out of every rate below
     n_record, n_called  loci with a VCF record / with a genotype
     call_rate         n_called / (n_loci - n_not_supported)
+    n_flagged         called loci whose record carries a flag (STRdust CLUSTERFAILURE or QUICKREF, a mahi-mahi filter):
+                      the genotype is still used; call_rate_unflagged leaves such loci out of the numerator
     n_eval            called loci that also have an assembly genotype; their alleles are compared
     <status>          fraction of compared alleles per status; also 'exact_genotype' (every allele MATCH) and
                       'mean_abs_diff' (bp)
@@ -52,7 +54,7 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
     for cls in ('STR', 'VNTR', 'all'):
         loci = [l for l in catalog.values() if cls == 'all' or l.motif_class == cls]
         supported = [l for l in loci if l.id not in skip]
-        n_rec = n_called = n_eval = n_alleles = n_exact = 0
+        n_rec = n_called = n_flagged = n_eval = n_alleles = n_exact = 0
         counts: Counter = Counter()
         abs_sum = 0
         for l in supported:
@@ -63,6 +65,7 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
             if c.lengths is None:
                 continue
             n_called += 1
+            n_flagged += bool(c.flags)
             t = truth.get(l.id)
             if not t:
                 continue
@@ -76,7 +79,8 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
                 sts.append(s)
             n_exact += all(s == 'MATCH' for s in sts)
         r = dict(n_loci=len(loci), n_not_supported=len(loci) - len(supported), n_record=n_rec, n_called=n_called,
-                 call_rate=n_called / len(supported) if supported else None, n_eval=n_eval)
+                 call_rate=n_called / len(supported) if supported else None, n_flagged=n_flagged,
+                 call_rate_unflagged=(n_called - n_flagged) / len(supported) if supported else None, n_eval=n_eval)
         for s in STATUSES:
             r[s] = counts[s] / n_alleles if n_alleles else None
         r['exact_genotype'] = n_exact / n_eval if n_eval else None

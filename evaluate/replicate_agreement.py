@@ -4,7 +4,9 @@
 For every tool version with at least two replicates of the same input:
   n_loci            loci with a record in at least one replicate
   record_identical  loci whose VCF record is byte-identical in all replicates (and present in all)
-  length_identical  loci called in every replicate with identical allele lengths (haplotype order ignored)
+  length_identical  loci called in every replicate with identical allele lengths (haplotype order ignored); also given
+                    as a fraction of the loci called in every replicate (length_identical_of_called), which does not
+                    penalise a tool for loci it does not call
   callset_stable    loci called in all replicates or in none; the rest are called in some replicates only
   max_len_diff, median_len_diff   over loci called in every replicate whose lengths differ: the largest
                     allele-length difference between any two replicates, in bp (blank if no locus differs)
@@ -24,7 +26,7 @@ from itertools import combinations
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import calls as C
 
-NAME = re.compile(r'calls_(?P<session>.+?)_(?P<order>\d+)_(?P<tool>[a-z]+)_(?P<version>.+)_rep(?P<rep>\d+)\.tsv\.gz$')
+NAME = re.compile(r'calls_(?P<session>.+?)_(?P<order>\d+)_(?P<tool>inquistr_unphased|vamos_old|[a-z]+)_(?P<version>.+)_rep(?P<rep>\d+)\.tsv\.gz$')
 
 
 def records(path):
@@ -50,7 +52,7 @@ def agreement(tool, files, catalog):
                 d[k] = line
         raw.append(d)
     n = len(reps)
-    rec_ident = len_ident = stable = 0
+    rec_ident = len_ident = stable = all_called = 0
     diffs = []
     for k in keys:
         called = [c[k].lengths if k in c and c[k].lengths else None for _, c in reps]
@@ -60,6 +62,7 @@ def agreement(tool, files, catalog):
         if n_called in (0, n):
             stable += 1
         if n_called == n:
+            all_called += 1
             sets = [tuple(sorted(x)) for x in called]
             if len(set(sets)) == 1:
                 len_ident += 1
@@ -69,6 +72,7 @@ def agreement(tool, files, catalog):
                                   for s1, s2 in combinations(sets, 2) if len(s1) == len(s2)), default=0))
     return dict(n_reps=n, n_loci=len(keys), record_identical=rec_ident / len(keys) if keys else None,
                 length_identical=len_ident / len(keys) if keys else None,
+                n_called_all=all_called, length_identical_of_called=len_ident / all_called if all_called else None,
                 callset_stable=stable / len(keys) if keys else None,
                 max_len_diff=max(diffs) if diffs else None, median_len_diff=statistics.median(diffs) if diffs else None,
                 n_loci_length_differs=len(diffs))
@@ -91,10 +95,10 @@ def main():
     for (tool, version), files in sorted(groups.items()):
         if len(files) >= a.min_reps:
             result[f'{tool} {version}'] = agreement(tool, files, catalog)
-    print('tool version\treps\tloci\trecord_identical\tlength_identical\tcallset_stable\tloci_len_differs\tmedian_diff\tmax_diff')
+    print('tool version\treps\tloci\trecord_identical\tlength_identical\tlength_identical_of_called\tcallset_stable\tloci_len_differs\tmedian_diff\tmax_diff')
     for k, r in result.items():
         f = lambda x: '' if x is None else (f'{x:.4f}' if isinstance(x, float) else str(x))
-        print('\t'.join([k, str(r['n_reps']), str(r['n_loci']), f(r['record_identical']), f(r['length_identical']),
+        print('\t'.join([k, str(r['n_reps']), str(r['n_loci']), f(r['record_identical']), f(r['length_identical']), f(r['length_identical_of_called']),
                          f(r['callset_stable']), str(r['n_loci_length_differs']), f(r['median_len_diff']), f(r['max_len_diff'])]))
     if a.json:
         with open(a.json, 'w') as fh:

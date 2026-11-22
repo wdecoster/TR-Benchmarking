@@ -12,10 +12,55 @@ CAT = {
 }
 
 
+CATX = dict(CAT, **{'chrX-500-530': C.Locus('chrX', 500, 530, 'CAG')})
+
+
 def vcf(tmp_path, lines, name='x.vcf'):
     p = tmp_path / name
     p.write_text('##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\n' + '\n'.join(lines) + '\n')
     return str(p)
+
+
+def test_inquistr_haploid_nan_second_value_is_a_valid_call_on_chrx_only(tmp_path):
+    p = vcf(tmp_path, ['chrX\t501\t.\tN\t<STR>\t.\t.\tEND=530\tGT:RB:FRB\t1|2:3,NaN:33,NaN',
+                       'chr1\t101\t.\tN\t<STR>\t.\t.\tEND=130\tGT:RB:FRB\t1|2:3,NaN:33,NaN'])
+    c = C.read_calls('inquistr', p, CATX)
+    assert c['chrX-500-530'].lengths == [33]                      # haploid: only the first value counts
+    assert c['chr1-100-130'].lengths is None                      # diploid with a missing allele: no call
+    assert C.read_calls('inquistr', p, CATX, karyotype='XX')['chrX-500-530'].lengths is None
+
+
+def test_two_allele_tool_is_truncated_to_one_allele_on_chrx(tmp_path):
+    p = vcf(tmp_path, ['chrX\t501\t.\t' + 'A' * 30 + '\t' + 'A' * 33 + '\t.\t.\tEND=530\tGT\t0/1'])
+    assert C.read_calls('longtr', p, CATX)['chrX-500-530'].lengths == [30]
+
+
+def test_deleted_repeat_array_is_an_empty_allele(tmp_path):
+    p = vcf(tmp_path, ['chr1\t101\tchr1-100-130\t' + 'A' * 30 + '\t<DEL>\t.\t.\tEND=130\tGT\t0/1'])
+    assert C.read_calls('longtr', p, CAT)['chr1-100-130'].lengths == [30, 0]
+
+
+def test_straglr_gt_forms(tmp_path):
+    p = vcf(tmp_path, ['chr1\t100\t.\tA\t<CNV:TR>\t.\tPASS\tEND=130;RB=45\tGT\t1',        # homozygous, one index
+                       'chr1\t200\t.\tA\t\t.\tPASS\tEND=260\tGT\t0'])                       # reference, no RB
+    c = C.read_calls('straglr', p, CAT)
+    assert c['chr1-100-130'].lengths == [45, 45] and c['chr1-200-260'].lengths == [60, 60]
+
+
+def test_wrong_key_scheme_is_an_error_not_zero_calls(tmp_path):
+    p = vcf(tmp_path, ['chr1\t999\tx\tA\tT\t.\t.\tEND=1000\tGT:FRB\t0/1:1,2'] * 3)
+    try:
+        C.read_calls('inquistr', p, CAT)
+    except ValueError:
+        return
+    raise AssertionError('expected a ValueError')
+
+
+def test_replicate_file_names_with_underscored_tools():
+    import replicate_agreement as R
+    m = R.NAME.search('calls_2026-11-22_13-28_3_inquistr_unphased_0.28.2_rep2.tsv.gz')
+    assert (m['tool'], m['version'], m['rep']) == ('inquistr_unphased', '0.28.2', '2')
+    assert R.NAME.search('calls_s_1_vamos_old_2.1.7_rep1.tsv.gz')['tool'] == 'vamos_old'
 
 
 def test_status():

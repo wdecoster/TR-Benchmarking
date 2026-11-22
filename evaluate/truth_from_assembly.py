@@ -31,10 +31,18 @@ def truth(mat_bam, pat_bam, catalog_bed, karyotype):
         pysam.tabix_index(sorted_bed + '.gz', preset='bed', force=True)
         tbx = pysam.TabixFile(sorted_bed + '.gz')
         res = {}
+        disagree = {}
         for name, path in (('mat', mat_bam), ('pat', pat_bam)):
             with pysam.AlignmentFile(path, 'rb') as bam:
-                res[name] = {k: v[1] for k, v in cooper(bam, tbx, 5, 0).items()}
+                # cooper returns (row, allele length from the CIGAR walk, allele sequence, n contigs). The paper's script
+                # measures the sequence (len(v[2])); the walk counts an insertion just upstream of the locus too, so the
+                # sequence length is used here and disagreements are counted.
+                alleles = cooper(bam, tbx, 5, 0)
+                disagree[name] = sum(1 for v in alleles.values() if v[1] != len(v[2]))
+                res[name] = {k: len(v[2]) for k, v in alleles.items()}
         tbx.close()
+    if any(disagree.values()):
+        print(f'note: allele length and sequence length differ at {disagree} loci (boundary insertions); sequence length used', file=sys.stderr)
     out = {}
     for k in set(res['mat']) | set(res['pat']):
         chrom = k.split('-')[0]

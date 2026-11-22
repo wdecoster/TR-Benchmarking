@@ -17,22 +17,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import calls as C
 import metrics as M
 
-# <results>/<tool>/<version>/<sample>.<this>; the first pattern that exists is used
+# <results>/<tool>/<version>/<this> as written by main.nf (see TrCommands.output)
 OUTPUTS = {
-    'atarva': ['atarva.vcf'], 'inquistr': ['inquistr.vcf'], 'inquistr_unphased': ['inquistr.vcf'], 'longtr': ['longTR.vcf.gz'], 'mahimahi': ['mahimahi/*.vcf'],
-    'medaka': ['medaka.vcf/medaka_to_ref.TR.vcf'], 'straglr': ['vcf'], 'strdust': ['strdust.sorted.vcf'],
-    'strkit': ['strkit.vcf'], 'vamos': ['vamos.fixed.vcf'],
+    'atarva': '{sample}.atarva.vcf', 'inquistr': '{sample}.inquistr.vcf', 'inquistr_unphased': '{sample}.inquistr.vcf',
+    'longtr': '{sample}.longTR.vcf.gz', 'mahimahi': '{sample}.mahimahi/{sample}.vcf',
+    'medaka': '{sample}.medaka.vcf/medaka_to_ref.TR.vcf', 'straglr': '{sample}.vcf', 'strdust': '{sample}.strdust.sorted.vcf',
+    'strkit': '{sample}.strkit.vcf', 'vamos': '{sample}.vamos.fixed.vcf',
 }
 
 
 def find_outputs(results, sample):
-    for tool, suffixes in OUTPUTS.items():
+    for tool, pattern in OUTPUTS.items():
         for vdir in sorted(glob.glob(os.path.join(results, tool, '*'))):
-            for suf in suffixes:
-                hits = glob.glob(os.path.join(vdir, f'{sample}.{suf}' if '*' not in suf else suf))
-                if hits:
-                    yield tool, os.path.basename(vdir), hits[0]
-                    break
+            path = os.path.join(vdir, pattern.format(sample=sample))
+            if os.path.exists(path):
+                yield tool, os.path.basename(vdir), path
 
 
 def read_truth(path):
@@ -51,16 +50,20 @@ def main():
     ap.add_argument('--catalog', required=True)
     ap.add_argument('--results', required=True)
     ap.add_argument('--sample', default='HG002.30x.haplotagged')
+    ap.add_argument('--karyotype', default='XY', choices=['XX', 'XY'], help='haploid chrX/chrY for XY')
     ap.add_argument('--truth')
     ap.add_argument('--json')
     a = ap.parse_args()
     catalog = C.read_catalog(a.catalog)
     truth = read_truth(a.truth) if a.truth else {}
     out = {}
-    for tool, version, path in find_outputs(a.results, a.sample):
-        calls = C.read_calls(tool, path, catalog)
+    found = list(find_outputs(a.results, a.sample))
+    if not found:
+        sys.exit(f'no tool outputs for sample {a.sample} under {a.results}')
+    for tool, version, path in found:
+        calls = C.read_calls(tool, path, catalog, a.karyotype)
         out[f'{tool} {version}'] = M.concordance(calls, truth, catalog, C.not_supported(tool, catalog))
-    cols = ['n_loci', 'n_not_supported', 'n_called', 'call_rate', 'n_eval', 'MATCH', 'ONE-OFF', 'MOTIF-OFF', 'MISMATCH',
+    cols = ['n_loci', 'n_not_supported', 'n_called', 'call_rate', 'call_rate_unflagged', 'n_eval', 'MATCH', 'ONE-OFF', 'MOTIF-OFF', 'MISMATCH',
             'exact_genotype', 'mean_abs_diff']
     print('tool version\tclass\t' + '\t'.join(cols))
     f = lambda x: '' if x is None else (f'{x:.4f}' if isinstance(x, float) else str(x))
