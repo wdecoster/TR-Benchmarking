@@ -3,7 +3,7 @@
  * single process), so the benchmark and the timing runs execute exactly the same commands.
  *
  *   script(tool, v, a)
- *     tool: atarva, inquistr, longtr, mahimahi, medaka, straglr, strdust, strkit, vamos, vamos_old
+ *     tool: atarva, inquistr, inquistr_unphased, longtr, mahimahi, medaka, straglr, strdust, strkit, vamos, vamos_old
  *     v:    the tool's entry in params.tool_versions (version, container, cmd, unphased, extra, ...)
  *     a:    sample, aln, ref, catalog, karyotype (XX/XY), cpus, sensitive (boolean),
  *           haplotagged (boolean, default true; mahi-mahi and inquiSTR refuse reads without HP tags unless told otherwise)
@@ -25,7 +25,8 @@ class TrCommands {
     static String output(String tool, String sample, boolean sensitive) {
         switch (tool) {
             case 'atarva':  return "${sample}.atarva.vcf"
-            case 'inquistr': return "${sample}.inquistr.vcf"
+            case 'inquistr':
+            case 'inquistr_unphased': return "${sample}.inquistr.vcf"
             case 'longtr':  return "${sample}.longTR.vcf.gz"
             case 'mahimahi': return "${sample}.mahimahi/${sample}.vcf"
             case 'medaka':  return "${sample}.medaka.vcf"
@@ -42,7 +43,8 @@ class TrCommands {
     static String catalogSuffix(String tool) {
         switch (tool) {
             case 'atarva':  return 'atarva.bed.gz'
-            case 'inquistr': return 'strdust.bed'    // same BED layout (0-based start, motif, ID) as STRdust
+            case 'inquistr':
+            case 'inquistr_unphased': return 'strdust.bed'    // same BED layout (0-based start, motif, ID) as STRdust
             case 'longtr':  return 'longtr.bed'
             case 'mahimahi': return 'mahimahi.bed'
             case 'medaka':  return 'medaka.bed'
@@ -70,13 +72,15 @@ class TrCommands {
             """.stripIndent()
 
         case 'inquistr':
+        case 'inquistr_unphased':
             // - phased mode (HP tags) is inquiSTR's default; it stops on input without HP tags, hence -u then
             // - output is length-only: symbolic <STR> alleles, allele lengths in FORMAT/FRB (full length, bp) and
             //   FORMAT/RB (relative to the reference); no allele sequences
             // - reads the CRAM with --reference (no ./ref_cache needed); the decode check still applies
             def haploid = (karyotype == 'XY') ? '--haploid chrX,chrY' : ''
             def extra = sensitive ? '--support 1' : ''
-            def unphased = (a.haplotagged == null || a.haplotagged) ? '' : '--unphased'
+            // inquistr_unphased: the same version with --unphased on haplotagged input too (as the paper ran STRdust)
+            def unphased = (tool == 'inquistr_unphased' || (a.haplotagged != null && !a.haplotagged)) ? '--unphased' : ''
             return """
             inquiSTR call ${aln} -R ${catalog} --reference ${ref} -t ${cpus} --sample-name ${sample} ${haploid} ${extra} ${unphased} --vcf \\
                 > ${sample}.inquistr.vcf ${TOOL_ERR}

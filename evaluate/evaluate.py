@@ -19,7 +19,7 @@ import metrics as M
 
 # <results>/<tool>/<version>/<sample>.<this>; the first pattern that exists is used
 OUTPUTS = {
-    'atarva': ['atarva.vcf'], 'inquistr': ['inquistr.vcf'], 'longtr': ['longTR.vcf.gz'], 'mahimahi': ['mahimahi/*.vcf'],
+    'atarva': ['atarva.vcf'], 'inquistr': ['inquistr.vcf'], 'inquistr_unphased': ['inquistr.vcf'], 'longtr': ['longTR.vcf.gz'], 'mahimahi': ['mahimahi/*.vcf'],
     'medaka': ['medaka.vcf/medaka_to_ref.TR.vcf'], 'straglr': ['vcf'], 'strdust': ['strdust.sorted.vcf'],
     'strkit': ['strkit.vcf'], 'vamos': ['vamos.fixed.vcf'],
 }

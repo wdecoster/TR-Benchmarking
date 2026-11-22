@@ -128,12 +128,16 @@ A tool is re-run when its **major or minor** version changes; patch releases are
 - Published: VCF, log and resolved config; the per-read TSV and tagged BAM stay in the work directory.
 - ONT developers are invited to check these choices.
 
-### inquiSTR 0.28.1 (version set `current`)
+### inquiSTR 0.28.2 (version set `current`; 0.28.1 was run first)
 **Conflict of interest:** inquiSTR is developed by the maintainer of this fork. It is run under the same rules as
 every other tool: its default settings, the same catalog loci, the same inputs and the same metrics. Its
 command is chosen to mirror the closest comparable tool (STRdust, same developer, same catalog file), and
 anything that departs from the defaults is listed here.
-- Container: the bioconda image `quay.io/biocontainers/inquistr:0.28.1--hdcf344f_0`.
+- Container: `containers/inquistr`, the release's static binary (SHA256 checked); the bioconda image does not exist for
+  0.28.2 yet (0.28.1 ran with `quay.io/biocontainers/inquistr:0.28.1--hdcf344f_0`). 0.28.2 fixes the `NaN` genotypes that
+  0.28.1 wrote as `1|2` (loci without a call).
+- Two variants of the same binary: `inquistr` (phased mode, default) and `inquistr_unphased` (`--unphased` on the
+  haplotagged input as well, as the paper ran STRdust).
 - Catalog: `catalogs/benchmark-catalog-v2.strdust.bed`. It has the same BED layout as STRdust's: a 0-based start,
   the motif and the locus ID. inquiSTR keeps its default 10 bp padding around each locus.
 - Settings, all visible in `lib/TrCommands.groovy`:

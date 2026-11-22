@@ -1,4 +1,5 @@
-# Builds the tool images that no registry provides in a working form (ATaRVa; mahi-mahi; medaka 2.1.1 with the
+# Builds the tool images that no registry provides in a working form (ATaRVa; mahi-mahi; inquiSTR releases without a
+# bioconda image yet; medaka 2.1.1 with the
 # pyabpoa it requires) and pushes them to ghcr.io. For ATaRVa the date pins the dependency resolution to the day after the release.
 name: containers
 on:
@@ -63,6 +64,29 @@ jobs:
             PYABPOA_VERSION=${{ matrix.pyabpoa }}
             PYTHON_VERSION=${{ matrix.python }}
           tags: ghcr.io/${{ github.repository_owner }}/medaka:${{ matrix.tag }}
+          push: true
+
+  inquistr:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - version: '0.28.2'
+            sha256: 'cc4ee22d826c9a1d4eea6e478c9ee0235f6c9c452a41b20f62c3b37a07a5b0b5'    # inquiSTR-linux-musl of the v0.28.2 release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: containers/inquistr
+          build-args: |
+            INQUISTR_VERSION=${{ matrix.version }}
+            INQUISTR_SHA256=${{ matrix.sha256 }}
+          tags: ghcr.io/${{ github.repository_owner }}/inquistr:${{ matrix.version }}
           push: true
 
   mahimahi:

@@ -32,7 +32,7 @@ params.chrom        = 'chr20'
 params.reps         = 3
 params.seed         = 42
 params.version_sets = 'paper,current'
-params.tools        = 'atarva,inquistr,longtr,mahimahi,medaka,straglr,strdust,strkit,vamos'
+params.tools        = 'atarva,inquistr,inquistr_unphased,longtr,mahimahi,medaka,straglr,strdust,strkit,vamos'
 // timed in every session, to compare sessions: a tool version that never changes (sessions are only comparable
 // when the anchor's time is stable; otherwise its ratio shows by how much a session ran slower or faster)
 params.anchor       = 'longtr:paper'
@@ -102,7 +102,7 @@ workflow {
 
     sub = subset_cram(cram, crai, ref, fai)
     // all tools' catalogs, whatever this session runs: the stored chr20 catalogs are reused by later sessions
-    def allTools = ['atarva', 'inquistr', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
+    def allTools = ['atarva', 'inquistr', 'inquistr_unphased', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
     def catFiles = allTools.collect { TrCommands.catalogSuffix(it) }.unique().collect { file("${params.catalog_dir}/${params.catalog}.${it}", checkIfExists: true) }   // inquiSTR shares STRdust's catalog
     // the stored chr20 catalogs are keyed on the content of the full catalogs: a changed catalog (for example mahi-mahi's
     // without 1 bp motifs) must not be served from an older stored subset

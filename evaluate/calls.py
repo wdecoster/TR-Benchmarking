@@ -22,7 +22,7 @@ record are simply absent from the result.
 import gzip
 from typing import Dict, List, NamedTuple, Optional
 
-TOOLS = ('atarva', 'inquistr', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos')
+TOOLS = ('atarva', 'inquistr', 'inquistr_unphased', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos')
 
 
 class Locus(NamedTuple):
@@ -135,6 +135,7 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus]) -> Dict[str, Cal
     """Calls of one VCF, keyed by catalog locus ID. Records of loci that are not in the catalog are ignored."""
     if tool not in TOOLS:
         raise ValueError(f'unknown tool {tool}')
+    tool = 'inquistr' if tool == 'inquistr_unphased' else tool      # same output format
     calls: Dict[str, Call] = {}
     with _open(path) as fh:
         for line in fh:

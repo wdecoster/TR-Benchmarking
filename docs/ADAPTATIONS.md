@@ -35,6 +35,8 @@ Where a change affects results the effect is stated if known, otherwise "not mea
 | A-mahimahi-4 | mahi-mahi 1.0.0 | Own catalog file converted from the medaka catalog (`scripts/make_mahimahi_catalog.sh`). | Different catalog format. | FORK.md | None expected. |
 | A-mahimahi-5 | mahi-mahi 1.0.0 | In sensitive mode `min_region_coverage=1`, `min_read_support_per_allele=1`. | Closest equivalent of the other tools' "min reads 1". | FORK.md | mahi-mahi still keeps a minimum of 3 reads per cluster. |
 | A-inquistr-1 | inquiSTR 0.28.1 | Same catalog file as STRdust; phased mode; `--haploid chrX,chrY` for XY; `--support 1` in sensitive mode; `--unphased` only without HP tags. | Mirrors the closest comparable tool. | FORK.md | Output is length-only; sequence-based metrics are not available. |
+| A-inquistr-2 | inquiSTR 0.28.2 | Own image from the GitHub release binary (sha256 checked). | No bioconda image yet (released 2026-11-22). | `containers/inquistr` | None: the release binary. |
+| A-inquistr-3 | inquiSTR 0.28.2 | Also run with `--unphased` on the haplotagged input (`inquistr_unphased`, reported next to the default). | Compares phased and unphased calling; the paper ran STRdust with `--unphased` on haplotagged data. | FORK.md | A second result set, not a replacement. |
 
 ## Evaluation and timing
 | ID | What we did | Why |
