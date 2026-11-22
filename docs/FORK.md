@@ -14,6 +14,9 @@ benchmarked tools. To keep that conflict of interest manageable, everything is p
 command for every tool, run logs and results. The same rules apply to every tool. **Tool developers are explicitly
 invited to open issues or PRs** to improve how their tool is run (parameters, catalog conversion, output parsing).
 
+Every change made to get a tool running is listed, with reasons, in **[ADAPTATIONS.md](ADAPTATIONS.md)**; developers
+are invited to comment on them.
+
 ## What changed compared to upstream
 
 | Upstream | This fork |
@@ -30,7 +33,7 @@ Results go to `<outdir>/<mode>/<tool>/<version>/`, so versions never overwrite e
 |---|---|---|---|
 | ATaRVa | 0.5.0 (local conda env) | `containers/atarva` (PyPI 0.5.0, dependencies as of the release date) | same version |
 | LongTR | 1.2 | the paper's Seqera container | yes |
-| Medaka Tandem | 2.1.1 (conda env) | `containers/medaka` (bioconda 2.1.1 with pyabpoa 1.5.1)† | same version |
+| Medaka Tandem | 2.1.1 (conda env) | `containers/medaka` (bioconda 2.1.1 with pyabpoa 1.5.5, version check patched)† | same version, patched |
 | Straglr | 1.5.5 (git checkout) | the 1.5.5 container declared in the original workflow | same version, presumably |
 | STRdust | 0.16.0 (static binary) | biocontainers strdust 0.16.0 | same version |
 | STRkit | 0.24.2 | the paper's ghcr container | yes |
@@ -40,7 +43,9 @@ Results go to `<outdir>/<mode>/<tool>/<version>/`, so versions never overwrite e
 binary reports "Version: 3.0.4". "vamos 3.0.5" is therefore that commit.
 
 † The bioconda recipes of medaka 2.1.1 do not pin pyabpoa, and `medaka tandem` 2.1.1 refuses to start with anything
-but pyabpoa 1.5.1, so none of the published 2.1.1 images can run it.
+but pyabpoa 1.5.1, so none of the published 2.1.1 images can run it. With pyabpoa 1.5.1 the run also fails on HG002
+(medaka #583); the image used here has pyabpoa 1.5.5 and a patched version check, see
+[ADAPTATIONS.md](ADAPTATIONS.md) (A-medaka-1).
 
 Versions reported by every container: `tests/containers.nf` (all 21 images checked 2026-11-17).
 

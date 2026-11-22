@@ -43,6 +43,11 @@ jobs:
           - version: '2.1.1'
             pyabpoa: '1.5.1'
             python: '3.10'
+            tag: '2.1.1'
+          - version: '2.1.1'
+            pyabpoa: '1.5.5'
+            python: '3.10'
+            tag: '2.1.1-pyabpoa1.5.5'     # medaka's version check patched, see docs/ADAPTATIONS.md (A-medaka-1)
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
@@ -57,7 +62,7 @@ jobs:
             MEDAKA_VERSION=${{ matrix.version }}
             PYABPOA_VERSION=${{ matrix.pyabpoa }}
             PYTHON_VERSION=${{ matrix.python }}
-          tags: ghcr.io/${{ github.repository_owner }}/medaka:${{ matrix.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/medaka:${{ matrix.tag }}
           push: true
 
   mahimahi:
