@@ -103,7 +103,13 @@ workflow {
     sub = subset_cram(cram, crai, ref, fai)
     // all tools' catalogs, whatever this session runs: the stored chr20 catalogs are reused by later sessions
     def allTools = ['atarva', 'inquistr', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos']
-    catalogs = subset_catalogs(allTools.collect { TrCommands.catalogSuffix(it) }.unique().collect { file("${params.catalog_dir}/${params.catalog}.${it}", checkIfExists: true) })   // inquiSTR shares STRdust's catalog
+    def catFiles = allTools.collect { TrCommands.catalogSuffix(it) }.unique().collect { file("${params.catalog_dir}/${params.catalog}.${it}", checkIfExists: true) }   // inquiSTR shares STRdust's catalog
+    // the stored chr20 catalogs are keyed on the content of the full catalogs: a changed catalog (for example mahi-mahi's
+    // without 1 bp motifs) must not be served from an older stored subset
+    def md = java.security.MessageDigest.getInstance('MD5')
+    catFiles.sort { it.name }.each { md.update(it.name.bytes); md.update(it.bytes) }
+    def catKey = md.digest().encodeHex().toString().take(12)
+    catalogs = subset_catalogs(catFiles, catKey)
     refcache = ref_cache(ref, fai)
 
     timed(Channel.fromList(runs), sub, catalogs, ref, fai, refcache).row
@@ -142,10 +148,11 @@ process subset_catalogs {
     container params.samtools_container
     cpus 1
     memory 2.GB
-    storeDir "${params.outdir}/timing/inputs"
+    storeDir "${params.outdir}/timing/inputs/catalogs_${catkey}"
 
     input:
     path cats, stageAs: 'full/*'
+    val catkey
 
     output:
     path "catalogs_${params.chrom}"
