@@ -168,9 +168,8 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus], karyotype: str =
             fmt = dict(zip(rec[8].split(':'), rec[9].split(':')))
             gt = _gt(fmt.get('GT', '.'))
             flags = []
-            for flag in ('CLUSTERFAILURE', 'QUICKREF'):
-                if flag in rec[7].split(';'):
-                    flags.append(flag)
+            if 'CLUSTERFAILURE' in rec[7].split(';'):       # QUICKREF is not a flag: it is a shortcut to a 0/0 call
+                flags.append('CLUSTERFAILURE')
             if tool == 'mahimahi' and rec[6] not in ('PASS', '.'):
                 flags.append(rec[6])
             flags = ','.join(flags)

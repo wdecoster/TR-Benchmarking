@@ -43,7 +43,7 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
     n_not_supported   loci the tool cannot take at all (mahi-mahi and 1 bp motifs): left out of every rate below
     n_record, n_called  loci with a VCF record / with a genotype
     call_rate         n_called / (n_loci - n_not_supported)
-    n_flagged         called loci whose record carries a flag (STRdust CLUSTERFAILURE or QUICKREF, a mahi-mahi filter):
+    n_flagged         called loci whose record carries a flag (STRdust CLUSTERFAILURE, a mahi-mahi filter):
                       the genotype is still used; call_rate_unflagged leaves such loci out of the numerator
     n_eval            called loci that also have an assembly genotype; their alleles are compared
     <status>          fraction of compared alleles per status; also 'exact_genotype' (every allele MATCH) and
