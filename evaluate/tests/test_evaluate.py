@@ -102,16 +102,19 @@ def test_mahimahi_homozygous_has_one_value_and_homopolymers_are_not_supported(tm
     assert C.not_supported('strdust', CAT) == []
 
 
-def test_concordance_by_class_and_not_supported():
+def test_concordance_all_loci_counts_unsupported_as_not_called_and_homopolymer_free_analysis():
     calls = {'chr1-100-130': C.Call([30, 33]), 'chr1-200-260': C.Call(None)}
     truth = {'chr1-100-130': [33, 30], 'chr1-200-260': [60, 60], 'chr2-50-60': [10, 10]}
-    r = M.concordance(calls, truth, CAT, not_supported=['chr2-50-60'])
-    assert r['STR']['n_loci'] == 2 and r['STR']['n_not_supported'] == 1       # the homopolymer
-    assert r['STR']['call_rate'] == 1.0 and r['STR']['MATCH'] == 1.0 and r['STR']['exact_genotype'] == 1.0
+    r = M.concordance(calls, truth, CAT, not_supported=['chr2-50-60'])                 # main analysis: every locus
+    assert r['STR']['n_loci'] == 2 and r['STR']['n_not_supported'] == 1                  # the homopolymer stays in
+    assert r['STR']['call_rate'] == 0.5 and r['STR']['MATCH'] == 1.0 and r['STR']['exact_genotype'] == 1.0
+    assert r['STR']['n_truth'] == 2 and r['STR']['exact_of_truth_loci'] == 0.5           # the unsupported locus counts as wrong
     assert r['VNTR']['n_record'] == 1 and r['VNTR']['n_called'] == 0 and r['VNTR']['call_rate'] == 0.0
-    assert r['VNTR']['MATCH'] is None                                         # nothing to compare
+    assert r['VNTR']['MATCH'] is None                                                    # nothing to compare
     assert r['all']['n_loci'] == 3 and r['all']['n_called'] == 1
-
+    h = M.concordance(calls, truth, CAT, not_supported=['chr2-50-60'], analysis='no_homopolymers')
+    assert h['STR']['n_loci'] == 1 and h['STR']['n_not_supported'] == 0 and h['STR']['call_rate'] == 1.0
+    assert h['all']['n_loci'] == 2 and h['all']['exact_of_truth_loci'] == 0.5
 
 if __name__ == '__main__':      # runs without pytest: python3 tests/test_evaluate.py
     import inspect

@@ -62,14 +62,15 @@ def main():
         sys.exit(f'no tool outputs for sample {a.sample} under {a.results}')
     for tool, version, path in found:
         calls = C.read_calls(tool, path, catalog, a.karyotype)
-        out[f'{tool} {version}'] = M.concordance(calls, truth, catalog, C.not_supported(tool, catalog))
+        out[f'{tool} {version}'] = {an: M.concordance(calls, truth, catalog, C.not_supported(tool, catalog), an) for an in M.ANALYSES}
     cols = ['n_loci', 'n_not_supported', 'n_called', 'call_rate', 'call_rate_unflagged', 'n_eval', 'MATCH', 'ONE-OFF', 'MOTIF-OFF', 'MISMATCH',
-            'exact_genotype', 'mean_abs_diff']
-    print('tool version\tclass\t' + '\t'.join(cols))
+            'exact_genotype', 'exact_of_truth_loci', 'mean_abs_diff']
+    print('tool version\tanalysis\tclass\t' + '\t'.join(cols))
     f = lambda x: '' if x is None else (f'{x:.4f}' if isinstance(x, float) else str(x))
-    for k, by_class in out.items():
-        for cls, r in by_class.items():
-            print(f'{k}\t{cls}\t' + '\t'.join(f(r[c]) for c in cols))
+    for k, by_analysis in out.items():
+        for an, by_class in by_analysis.items():
+            for cls, r in by_class.items():
+                print(f'{k}\t{an}\t{cls}\t' + '\t'.join(f(r[c]) for c in cols))
     if a.json:
         with open(a.json, 'w') as fh:
             json.dump(out, fh, indent=1)

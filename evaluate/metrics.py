@@ -35,29 +35,43 @@ def pair_alleles(tool: Sequence[int], truth: Sequence[int]) -> List[Tuple[int, i
     return [(min(t, key=lambda x: abs(x - y)), y) for y in a]
 
 
+ANALYSES = {
+    'all_loci': lambda l: True,                          # the main analysis: every catalog locus, nothing left out
+    'no_homopolymers': lambda l: len(l.motif) > 1,       # the same without 1 bp motifs, for every tool alike
+}
+
+
 def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Dict[str, Locus],
-                not_supported: Iterable[str] = ()) -> Dict[str, dict]:
+                not_supported: Iterable[str] = (), analysis: str = 'all_loci') -> Dict[str, dict]:
     """Per motif class ('STR', 'VNTR', 'all'): how many catalog loci the tool covers and how its alleles compare.
 
-    n_loci            loci in the catalog
-    n_not_supported   loci the tool cannot take at all (mahi-mahi and 1 bp motifs): left out of every rate below
+    analysis          'all_loci' (default, the main analysis) or 'no_homopolymers' (loci with a 1 bp motif left out
+                      for every tool); loci a tool cannot take count as not called in 'all_loci'
+    n_loci            loci in the analysis
+    n_not_supported   of those, loci the tool cannot take at all (mahi-mahi and 1 bp motifs); informational, they are
+                      not called and stay in the denominators
     n_record, n_called  loci with a VCF record / with a genotype
-    call_rate         n_called / (n_loci - n_not_supported)
+    call_rate         n_called / n_loci
     n_flagged         called loci whose record carries a flag (STRdust CLUSTERFAILURE, a mahi-mahi filter):
                       the genotype is still used; call_rate_unflagged leaves such loci out of the numerator
     n_eval            called loci that also have an assembly genotype; their alleles are compared
-    <status>          fraction of compared alleles per status; also 'exact_genotype' (every allele MATCH) and
-                      'mean_abs_diff' (bp)
+    <status>          fraction of compared alleles per status; also 'exact_genotype' (every allele MATCH, of the
+                      evaluated loci) and 'mean_abs_diff' (bp)
+    n_truth, exact_of_truth_loci
+                      loci with an assembly genotype, and the fraction of them with an exact genotype: loci without
+                      a call count as wrong, so a tool cannot gain by skipping hard loci
     """
     skip = set(not_supported)
+    keep = ANALYSES[analysis]
     out = {}
     for cls in ('STR', 'VNTR', 'all'):
-        loci = [l for l in catalog.values() if cls == 'all' or l.motif_class == cls]
-        supported = [l for l in loci if l.id not in skip]
-        n_rec = n_called = n_flagged = n_eval = n_alleles = n_exact = 0
+        loci = [l for l in catalog.values() if keep(l) and (cls == 'all' or l.motif_class == cls)]
+        n_rec = n_called = n_flagged = n_eval = n_alleles = n_exact = n_truth = 0
         counts: Counter = Counter()
         abs_sum = 0
-        for l in supported:
+        for l in loci:
+            t = truth.get(l.id)
+            n_truth += bool(t)
             c = calls.get(l.id)
             if c is None:
                 continue
@@ -66,7 +80,6 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
                 continue
             n_called += 1
             n_flagged += bool(c.flags)
-            t = truth.get(l.id)
             if not t:
                 continue
             n_eval += 1
@@ -78,12 +91,14 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
                 n_alleles += 1
                 sts.append(s)
             n_exact += all(s == 'MATCH' for s in sts)
-        r = dict(n_loci=len(loci), n_not_supported=len(loci) - len(supported), n_record=n_rec, n_called=n_called,
-                 call_rate=n_called / len(supported) if supported else None, n_flagged=n_flagged,
-                 call_rate_unflagged=(n_called - n_flagged) / len(supported) if supported else None, n_eval=n_eval)
+        n = len(loci)
+        r = dict(n_loci=n, n_not_supported=sum(l.id in skip for l in loci), n_record=n_rec, n_called=n_called,
+                 call_rate=n_called / n if n else None, n_flagged=n_flagged,
+                 call_rate_unflagged=(n_called - n_flagged) / n if n else None, n_eval=n_eval, n_truth=n_truth)
         for s in STATUSES:
             r[s] = counts[s] / n_alleles if n_alleles else None
         r['exact_genotype'] = n_exact / n_eval if n_eval else None
+        r['exact_of_truth_loci'] = n_exact / n_truth if n_truth else None
         r['mean_abs_diff'] = abs_sum / n_alleles if n_alleles else None
         out[cls] = r
     return out

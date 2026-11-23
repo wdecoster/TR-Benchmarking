@@ -6,7 +6,7 @@ no sequences). Run the tests with `python3 evaluate/tests/test_evaluate.py`.
 | File | What |
 |---|---|
 | `calls.py` | reads any tool's VCF into allele lengths per catalog locus; where each length comes from is documented per tool at the top of the file |
-| `metrics.py` | call rate and concordance with a truth, per motif-length class (STR 1-6 bp, VNTR > 6 bp); outcome per allele as in the paper (MATCH, ONE-OFF, MOTIF-OFF, MISMATCH) |
+| `metrics.py` | call rate and concordance with a truth, per motif-length class (STR 1-6 bp, VNTR > 6 bp), for two analyses: `all_loci` (the main one, no locus left out; loci a tool cannot take count as not called) and `no_homopolymers` (1 bp motifs left out for every tool); outcome per allele as in the paper (MATCH, ONE-OFF, MOTIF-OFF, MISMATCH) |
 | `evaluate.py` | all tool outputs of a results folder → table / JSON; with `--truth` also concordance |
 | `replicate_agreement.py` | agreement of the replicate runs of `timing.nf` (`timing/calls/`) |
 

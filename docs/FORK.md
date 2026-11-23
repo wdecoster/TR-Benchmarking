@@ -123,7 +123,9 @@ results and its developer says so (STRdust 1.4.2, ADAPTATIONS A-strdust-3).
   - `--bypass-haplotag-check` only for input without haplotags (`--haplotagged false`, e.g. the pathogenic panel).
 - Homopolymers: mahi-mahi refuses single-base motifs ("Single-base motifs are not supported", checked before any
   genotyping, one such locus stops the whole run). The 1,000 loci with a 1 bp motif are therefore left out of its
-  catalog (42,009 loci) and count as "not supported" for mahi-mahi, not as failed calls or zeros.
+  catalog (42,009 loci). In the main analysis (all 43,009 loci, nothing left out) they count as not called for
+  mahi-mahi, so the hard loci cannot flatter its score; a second analysis leaves the 1 bp motifs out for every tool
+  alike (`no_homopolymers`, 42,009 loci), and `exact_of_truth_loci` counts every locus without a call as wrong.
 - Scope: mahi-mahi is designed for STRs and states it is not suited to long-motif TRs; 36,940 of the 43,009
   catalog loci have a motif longer than 6 bp. It is run on the full catalog like every tool; results should be
   read per motif-length class (the catalog has ~1,000 loci for each motif length 1-6 bp).
