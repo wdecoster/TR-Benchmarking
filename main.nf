@@ -163,7 +163,6 @@ process longtr {
 
 process inquistr {
     tag "${sample}"
-    maxForks 1      // 0.28.2 writes a temporary TSV in the shared /tmp named after the PID: two containers at once can collide (A-inquistr-4)
     container { params.tool_versions[tool].container }
     cpus params.threads
     memory { 16.GB * task.attempt }

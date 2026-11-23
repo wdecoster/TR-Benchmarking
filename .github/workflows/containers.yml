@@ -96,6 +96,8 @@ jobs:
         include:
           - version: '0.28.2'
             sha256: 'cc4ee22d826c9a1d4eea6e478c9ee0235f6c9c452a41b20f62c3b37a07a5b0b5'    # inquiSTR-linux-musl of the v0.28.2 release
+          - version: '0.28.3'
+            sha256: 'd9348bc406a5d99840a037344c2c9aa9f5377c531ee91fcb8b3d7fbb235c4637'    # inquiSTR-linux-musl of the v0.28.3 release
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3

@@ -130,7 +130,7 @@ results and its developer says so (STRdust 1.4.2, ADAPTATIONS A-strdust-3).
 - Published: VCF, log and resolved config; the per-read TSV and tagged BAM stay in the work directory.
 - ONT developers are invited to check these choices.
 
-### inquiSTR 0.28.2 (version set `current`; 0.28.1 was run first)
+### inquiSTR 0.28.3 (version set `current`; 0.28.1 was run first)
 **Conflict of interest:** inquiSTR is developed by the maintainer of this fork. It is run under the same rules as
 every other tool: its default settings, the same catalog loci, the same inputs and the same metrics. Its
 command is chosen to mirror the closest comparable tool (STRdust, same developer, same catalog file), and
