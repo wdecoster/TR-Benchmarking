@@ -38,6 +38,7 @@ Where a change affects results the effect is stated if known, otherwise "not mea
 | A-inquistr-1 | inquiSTR 0.28.1 | Same catalog file as STRdust; phased mode; `--haploid chrX,chrY` for XY; `--support 1` in sensitive mode; `--unphased` only without HP tags. | Mirrors the closest comparable tool. | FORK.md | Output is length-only; sequence-based metrics are not available. |
 | A-inquistr-2 | inquiSTR 0.28.2 | Own image from the GitHub release binary (sha256 checked). | No bioconda image yet (released 2026-11-22). | `containers/inquistr` | None: the release binary. |
 | A-inquistr-3 | inquiSTR 0.28.2 | Also run with `--unphased` on the haplotagged input (`inquistr_unphased`, reported next to the default). | Compares phased and unphased calling; the paper ran STRdust with `--unphased` on haplotagged data. | FORK.md | A second result set, not a replacement. |
+| A-inquistr-4 | inquiSTR 0.28.2 | The inquiSTR tasks run one at a time (`maxForks 1`). | When the phased and `--unphased` variants ran at the same time, both failed with `Malformed line in TSV (expected 9 columns, got 16)`. The developer's assessment: processes in separate containers can have the same PID and then write the same temporary file in the shared /tmp. A fixed release is coming. | run log 2026-11-23 | None on results; the runs take twice as long in wall time. To be removed once the fixed release is used. |
 
 ## Evaluation and timing
 | ID | What we did | Why |
