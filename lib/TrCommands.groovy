@@ -79,6 +79,8 @@ class TrCommands {
             // - reads the CRAM with --reference (no ./ref_cache needed); the decode check still applies
             def haploid = (karyotype == 'XY') ? '--haploid chrX,chrY' : ''
             def extra = sensitive ? '--support 1' : ''
+            // v.minlen: explicit --minlen (0.30.0 made the bound inclusive, so the default 1 now counts 1 bp indels; 2 = old behaviour)
+            if (v.minlen) extra += " --minlen ${v.minlen}"
             // inquistr_unphased: the same version with --unphased on haplotagged input too (as the paper ran STRdust)
             def unphased = (tool == 'inquistr_unphased' || (a.haplotagged != null && !a.haplotagged)) ? '--unphased' : ''
             return """

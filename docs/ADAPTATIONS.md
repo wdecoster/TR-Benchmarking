@@ -54,3 +54,8 @@ Where a change affects results the effect is stated if known, otherwise "not mea
 Straglr 1.5.5, LongTR 1.2, STRkit 0.24.2 and 0.25.0, ATaRVa 0.5.0/0.7.1 (apart from the above) run with the
 commands of the original workflow. Straglr's memory use (peak 117 GB here, up to ~70 GB in the paper) is a
 measurement, not an adaptation.
+
+### A-inquistr-6: diagnostic run with explicit `--minlen 2` (inquiSTR 0.30.0)
+0.30.0 made `--minlen` inclusive, so the default (1) now counts 1 bp indels, which older versions dropped (effective 2).
+Our default run uses no `--minlen`. A diagnostic set (`-profile local,inquistr_minlen2`, version label `0.30.0-minlen2`) passes `--minlen 2`
+to test whether this explains the lower accuracy of 0.30.0. Not a release result; reported separately.
