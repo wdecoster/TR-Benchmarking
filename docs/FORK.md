@@ -132,7 +132,7 @@ results and its developer says so (STRdust 1.4.2, ADAPTATIONS A-strdust-3).
 - Published: VCF, log and resolved config; the per-read TSV and tagged BAM stay in the work directory.
 - ONT developers are invited to check these choices.
 
-### inquiSTR 0.28.4 (version set `current`; 0.28.1 was run first)
+### inquiSTR 0.30.0 (version set `current`; 0.28.1 was run first)
 **Conflict of interest:** inquiSTR is developed by the maintainer of this fork. It is run under the same rules as
 every other tool: its default settings, the same catalog loci, the same inputs and the same metrics. Its
 command is chosen to mirror the closest comparable tool (STRdust, same developer, same catalog file), and
@@ -140,7 +140,7 @@ anything that departs from the defaults is listed here.
 - Container: `containers/inquistr`, the release's static binary (SHA256 checked); the bioconda image does not exist for
   0.28.3 yet (0.28.1 ran with `quay.io/biocontainers/inquistr:0.28.1--hdcf344f_0`). 0.28.2 fixed the `NaN` genotypes that
   0.28.1 wrote as `1|2` (loci without a call).
-  0.28.2 itself gave no results: two tasks at once collided on a temporary file (A-inquistr-4); 0.28.3 prevents that. 0.28.3 then crashed with `--unphased --support 1` (sensitive mode); 0.28.4 fixes that, and the sensitive mode of both variants is run with it (default-mode results are from 0.28.3).
+  0.28.2 itself gave no results: two tasks at once collided on a temporary file (A-inquistr-4); 0.28.3 prevents that. 0.28.3 then crashed with `--unphased --support 1` (sensitive mode); 0.28.4 fixed that. 0.29.0 and 0.30.0 were released on 2026-11-24 (minor releases): the version we report is 0.30.0 (0.29.0 was not run), and both modes of both variants are rerun with it; earlier results (0.28.1, 0.28.3, 0.28.4) stay in the register of runs.
 - Two variants of the same binary: `inquistr` (phased mode, default) and `inquistr_unphased` (`--unphased` on the
   haplotagged input as well, as the paper ran STRdust).
 - Catalog: `catalogs/benchmark-catalog-v2.strdust.bed`. It has the same BED layout as STRdust's: a 0-based start,

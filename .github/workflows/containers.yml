@@ -100,6 +100,8 @@ jobs:
             sha256: 'd9348bc406a5d99840a037344c2c9aa9f5377c531ee91fcb8b3d7fbb235c4637'    # inquiSTR-linux-musl of the v0.28.3 release
           - version: '0.28.4'
             sha256: '774a5680a0c3b67368c0051f8ea9cf0ef65fb39530c5909f1018bdf59836b973'    # inquiSTR-linux-musl of the v0.28.4 release
+          - version: '0.30.0'
+            sha256: 'ddff3d6849ec87f4aa1e13550ba5b35f18b074a6b15f457beb4fb5fba30ecd8c'    # inquiSTR-linux-musl of the v0.30.0 release (matches the digest GitHub lists)
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
