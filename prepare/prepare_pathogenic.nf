@@ -47,7 +47,8 @@ workflow {
     file(params.table).splitCsv(header: true, sep: '\t').each { n_fastq[it.sample] = it.fastq_urls.tokenize(';').size() }
     downloaded = download(fastqs)
         .map { sample, karyotype, fq -> tuple(groupKey(sample, n_fastq[sample]), karyotype, fq) }
-        .groupTuple(by: [0, 1])
+        .groupTuple()      // by the GroupKey alone: the size is only honoured when the key is the sole grouping element
+        .map { sample, karyotypes, fqs -> tuple(sample.toString(), karyotypes.unique().with { it.size() == 1 ? it[0] : error("${sample}: several karyotypes ${it}") }, fqs) }
 
     aligned = align(downloaded, ref, fai)
 
