@@ -63,3 +63,7 @@ to test whether this explains the lower accuracy of 0.30.0. Not a release result
 ### A-pathogenic-1: resumable curl download
 prepare_pathogenic.nf staged the ENA FASTQs through Nextflow's URL staging, which failed on a truncated transfer (171 MB of 6.8 GB) without resuming.
 Replaced by a `download` process (host curl, `-C -` resume, up to 30 attempts, max 4 parallel) with the same MD5 check. Data and alignment unchanged.
+
+### A-pathogenic-2: per-sample grouping with groupKey, two alignments at once
+A plain groupTuple waited for all 31 downloads before the first alignment. groupKey(sample, number of FASTQs) lets a sample align as soon as
+its own files are in; alignments run two at a time (maxForks 2, 2 x 16 threads). Data and commands unchanged.

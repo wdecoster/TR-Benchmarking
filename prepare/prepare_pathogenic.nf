@@ -41,7 +41,12 @@ workflow {
         [urls, md5s].transpose().collect { u, m -> tuple(r.sample, r.karyotype, u, m) }   // downloaded by process 'download' (Nextflow's own URL staging does not resume truncated transfers)
     }
 
+    // groupKey tells Nextflow how many FASTQs a sample has, so a sample is aligned as soon as its own files are in
+    // (a plain groupTuple would wait for every download of every sample)
+    def n_fastq = [:]
+    file(params.table).splitCsv(header: true, sep: '\t').each { n_fastq[it.sample] = it.fastq_urls.tokenize(';').size() }
     downloaded = download(fastqs)
+        .map { sample, karyotype, fq -> tuple(groupKey(sample, n_fastq[sample]), karyotype, fq) }
         .groupTuple(by: [0, 1])
 
     aligned = align(downloaded, ref, fai)
@@ -81,7 +86,7 @@ process align {
     container params.minimap2_container
     cpus params.align_threads
     memory 48.GB
-    maxForks 1
+    maxForks 2        // two alignments at once (2 x 16 threads); the site config must allow it (executor.cpus)
     publishDir "${params.outdir}/pathogenic", mode: 'copy'
 
     input:
