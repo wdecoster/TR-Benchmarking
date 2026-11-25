@@ -38,10 +38,10 @@ workflow {
         def urls = r.fastq_urls.tokenize(';')
         def md5s = r.fastq_md5.tokenize(';')
         if (urls.size() != md5s.size()) error("${r.sample}: ${urls.size()} URLs but ${md5s.size()} MD5s")
-        [urls, md5s].transpose().collect { u, m -> tuple(r.sample, r.karyotype, file(u), m) }   // Nextflow downloads (stages) the URL
+        [urls, md5s].transpose().collect { u, m -> tuple(r.sample, r.karyotype, u, m) }   // downloaded by process 'download' (Nextflow's own URL staging does not resume truncated transfers)
     }
 
-    downloaded = verify(fastqs)
+    downloaded = download(fastqs)
         .groupTuple(by: [0, 1])
 
     aligned = align(downloaded, ref, fai)
@@ -51,20 +51,27 @@ workflow {
         .collectFile(name: 'pathogenic.samples.list', storeDir: params.outdir, newLine: true, sort: true)
 }
 
-process verify {
-    tag "${sample} ${fq.name}"
-    container params.minimap2_container
+process download {
+    // curl on the host (no container): resumes a dropped connection (-C -) and retries; the MD5 must match
+    tag "${sample} ${url.tokenize('/')[-1]}"
     cpus 1
-    memory 1.GB
+    maxForks 4        // polite to ENA
 
     input:
-    tuple val(sample), val(karyotype), path(fq), val(md5)
+    tuple val(sample), val(karyotype), val(url), val(md5)
 
     output:
-    tuple val(sample), val(karyotype), path(fq)
+    tuple val(sample), val(karyotype), path("*.fastq.gz")
 
     script:
+    def fq = url.tokenize('/')[-1]
     """
+    ok=0
+    for i in \$(seq 1 30); do
+        if curl -sS -L -C - --connect-timeout 30 --retry 3 --retry-delay 10 -o ${fq} ${url}; then ok=1; break; fi
+        echo "download attempt \$i failed, resuming" >&2; sleep 30
+    done
+    [ \$ok = 1 ] || { echo "download of ${url} failed after 30 attempts" >&2; exit 1; }
     echo "${md5}  ${fq}" | md5sum -c -
     """
 }

@@ -59,3 +59,7 @@ measurement, not an adaptation.
 0.30.0 made `--minlen` inclusive, so the default (1) now counts 1 bp indels, which older versions dropped (effective 2).
 Our default run uses no `--minlen`. A diagnostic set (`-profile local,inquistr_minlen2`, version label `0.30.0-minlen2`) passes `--minlen 2`
 to test whether this explains the lower accuracy of 0.30.0. Not a release result; reported separately.
+
+### A-pathogenic-1: resumable curl download
+prepare_pathogenic.nf staged the ENA FASTQs through Nextflow's URL staging, which failed on a truncated transfer (171 MB of 6.8 GB) without resuming.
+Replaced by a `download` process (host curl, `-C -` resume, up to 30 attempts, max 4 parallel) with the same MD5 check. Data and alignment unchanged.
