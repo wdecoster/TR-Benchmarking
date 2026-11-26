@@ -92,7 +92,10 @@ class TrCommands {
         case 'longtr':
             def alignment_params = [-1.0, -0.458675, -1.0, -0.458675, -0.00005800168, -1, -1]
             def haploid_args = (karyotype == 'XY') ? '--haploid-chrs chrX,chrY' : ''
-            def extra = sensitive ? "--min-reads 1 --min-mean-qual 1 --bam-samps ${sample} --bam-libs ${sample}" : ''
+            // --bam-samps/--bam-libs: LongTR stops when a read group has no LB tag (the pathogenic panel, as in the paper's
+            // deveson workflows, which always pass them); the HG002 default run does not need them
+            def rg = (sensitive || a.longtr_rg) ? "--bam-samps ${sample} --bam-libs ${sample}" : ''
+            def extra = (sensitive ? "--min-reads 1 --min-mean-qual 1 " : '') + rg
             return """
             MAX_TR_LEN="\$(awk '{print \$3-\$2}' ${catalog} | sort -n | tail -n 1)"
             LongTR \\

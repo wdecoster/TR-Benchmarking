@@ -27,6 +27,7 @@ params.threads    = 1          // the paper timed every tool single-threaded
 params.catalog_dir = "${projectDir}/catalogs"
 params.catalog    = 'benchmark-catalog-v2'
 params.mosdepth   = false
+params.longtr_rg  = false     // pass --bam-samps/--bam-libs to LongTR in default mode too (input without LB read-group tag: the pathogenic panel)
 params.haplotagged = true     // input reads carry HP/PS tags (GIAB EPI2ME CRAMs); false for the pathogenic panel (mahi-mahi, inquiSTR)
 
 def die(msg) { error(msg) }
@@ -158,7 +159,7 @@ process longtr {
     path "${sample}.longTR.vcf.gz"
 
     script:
-    TrCommands.script('longtr', params.tool_versions.longtr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive])
+    TrCommands.script('longtr', params.tool_versions.longtr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive, longtr_rg: params.longtr_rg as boolean])
 }
 
 process inquistr {

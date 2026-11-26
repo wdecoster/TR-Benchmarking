@@ -67,3 +67,8 @@ Replaced by a `download` process (host curl, `-C -` resume, up to 30 attempts, m
 ### A-pathogenic-2: per-sample grouping with groupKey, two alignments at once
 A plain groupTuple waited for all 31 downloads before the first alignment. groupKey(sample, number of FASTQs) lets a sample align as soon as
 its own files are in; alignments run two at a time (maxForks 2, 2 x 16 threads). Data and commands unchanged.
+
+### A-pathogenic-3: LongTR read-group flags in default mode for the pathogenic panel
+Our pathogenic CRAMs (minimap2 with `-R @RG\tID:S\tSM:S`) have no LB tag, and LongTR 1.2 stops on that ("RG in BAM/CRAM header is lacking the LB tag").
+The paper's pathogenic workflows (`run_benchmarking_deveson*.nf`) always pass `--bam-samps S --bam-libs S`. `--longtr_rg true` does the same in default mode
+(sensitive mode always passed them). HG002 default commands are unchanged.
