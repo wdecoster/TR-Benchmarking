@@ -156,6 +156,12 @@ anything that departs from the defaults is listed here.
   and `FORMAT/RB` (relative to the reference). Metrics that need allele sequences (e.g. edit distance) do not
   apply to inquiSTR and are reported as not available, not as zero.
 
+## Legacy tools
+**Straglr** (paper version 1.5.5) is a legacy tool from 2026-11-26: it is no longer run. Reason: runtime and memory. On HG002 (30x) it took
+1 day 21 h wall with a peak of 117 GB RAM; on a 7 Gb pathogenic-panel sample it had not finished after 3.5 h. The paper-version results already
+produced stay in the results, marked legacy; Straglr 1.5.6 and the pathogenic panel were not run with it. A tool developer who has a faster
+configuration is welcome to open an issue or a pull request, and the tool can return.
+
 ## Planned tools
 None at the moment. Suggestions are welcome as issues.
 
