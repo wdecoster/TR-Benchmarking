@@ -2,8 +2,9 @@
 
 A *call* is the pair (or single value, on haploid chrX/chrY of XY samples) of allele lengths of one catalog locus:
 the length in bp of the repeat allele over the catalog interval, which is the number that every tool can give and
-that is comparable between tools. Sequences are not used here (inquiSTR and straglr report lengths only); the
-sequence-based metrics of the paper stay with `scripts/assembly_concordance.py`.
+that is comparable between tools. Sequences are optional (`Call.seqs`, used by the sequence-level metrics in metrics.py): the tools that
+write REF/ALT sequences (SEQ_TOOLS) give the sequence of each called allele over the catalog interval; inquiSTR,
+mahi-mahi and straglr report lengths only and have no sequences.
 
 Per tool, the length comes from the most direct field of its VCF, not from REF/ALT, wherever the tool has one:
   strdust, inquistr   FORMAT/FRB  (full allele length)
@@ -22,6 +23,7 @@ record are simply absent from the result.
 import gzip
 from typing import Dict, List, NamedTuple, Optional
 
+SEQ_TOOLS = ('atarva', 'longtr', 'medaka', 'strdust', 'strkit', 'vamos')     # tools whose VCF carries the allele sequences
 TOOLS = ('atarva', 'inquistr', 'inquistr_unphased', 'longtr', 'mahimahi', 'medaka', 'straglr', 'strdust', 'strkit', 'vamos')
 
 
@@ -55,6 +57,7 @@ def not_supported(tool: str, catalog: Dict[str, Locus]) -> List[str]:
 class Call(NamedTuple):
     lengths: Optional[List[int]]    # one value per haplotype; None = the tool made no call at this locus
     flags: str = ''                 # tool-specific remarks (for example STRdust's CLUSTERFAILURE), not interpreted
+    seqs: Optional[List[str]] = None    # allele sequences over the catalog interval, one per length; None for length-only tools
 
 
 def read_catalog(path: str) -> Dict[str, Locus]:
@@ -137,6 +140,31 @@ def _from_alleles(rec, gt, cat_len, alt_is_full=False) -> List[Optional[int]]:
     return lengths
 
 
+def _allele_seq(rec, a, locus, full=False) -> Optional[str]:
+    """Sequence of allele `a` (0 = REF) over the catalog interval, or None if the record has no sequence for it.
+
+    The record's REF may reach beyond the catalog interval (flanking bases: LongTR, STRkit, ATaRVa and medaka write
+    different amounts). The same number of bases is cut from both ends of the ALT sequence, so the allele covers
+    the catalog interval exactly; this assumes the tool did not change its flanks. A REF that does not span the interval
+    (vamos, which is one base shorter) cannot be trimmed: with `full` the ALT sequence is taken as the allele."""
+    ref, alts = rec[3], rec[4].split(',') if rec[4] not in ('.', '') else []
+    if a == 0:
+        s = ref
+    elif a <= len(alts) and alts[a - 1] in ('<DEL>', '*'):
+        return ''
+    elif a <= len(alts) and not alts[a - 1].startswith('<') and alts[a - 1] != '.':
+        s = alts[a - 1]
+    else:
+        return None
+    if full:
+        return s.upper()
+    pos = int(rec[1])
+    left, right = locus.start + 1 - pos, pos + len(ref) - 1 - locus.end
+    if left < 0 or right < 0 or len(s) < left + right:
+        return s.upper()
+    return s[left:len(s) - right].upper()
+
+
 HAPLOID_XY = ('chrX', 'chrY')
 
 
@@ -196,12 +224,18 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus], karyotype: str =
                 lengths = _from_alleles(rec, gt, locus.length, alt_is_full=(tool == 'vamos'))
             if tool == 'mahimahi' and len(lengths) == 1 and len(gt) == 2:
                 lengths = lengths * 2                   # mahi-mahi writes one value for a homozygous call
+            seqs = None
+            if tool in SEQ_TOOLS:
+                seqs = [_allele_seq(rec, a, locus, full=(tool == 'vamos' and a != 0)) for a in gt]
+                if any(x is None for x in seqs):
+                    seqs = None
             if karyotype == 'XY' and locus.chrom in HAPLOID_XY:
                 lengths = lengths[:1]
+                seqs = seqs[:1] if seqs else seqs
             if not lengths or any(x is None for x in lengths):
                 calls[key] = Call(None, flags)
             else:
-                calls[key] = Call(list(lengths), flags)
+                calls[key] = Call(list(lengths), flags, seqs)
     if n_rec and len(calls) < n_rec / 2:
         raise ValueError(f'{path}: only {len(calls)} of {n_rec} records are catalog loci for {tool}: wrong catalog or key scheme?')
     return calls

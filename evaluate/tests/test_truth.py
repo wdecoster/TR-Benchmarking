@@ -47,10 +47,22 @@ def test_insertion_just_upstream_of_the_locus_is_not_counted():
     assert t == {'chr1-100-130': [30, 30]}
 
 
+def test_truth_sequences_follow_the_length_order():
+    from truth_from_assembly import truth_alleles
+    with tempfile.TemporaryDirectory() as d:
+        make_bam(f'{d}/mat.bam', [('chr1', 50, '60M3I90M', 153)])
+        make_bam(f'{d}/pat.bam', [('chr1', 50, '150M', 150)])
+        with open(f'{d}/cat.bed', 'w') as fh:
+            fh.write('chr1\t100\t130\tCAG\n')
+        t = truth_alleles(f'{d}/mat.bam', f'{d}/pat.bam', f'{d}/cat.bed', 'XY')
+    assert [l for l, _ in t['chr1-100-130']] == [30, 33] and all(len(sq) == l for l, sq in t['chr1-100-130'])
+
+
 if __name__ == '__main__':
     if pysam is None:
         print('pysam not installed: skipped')
     else:
         test_truth_lengths_and_sex_chromosomes()
         test_insertion_just_upstream_of_the_locus_is_not_counted()
-        print('2 tests passed')
+        test_truth_sequences_follow_the_length_order()
+        print('3 tests passed')

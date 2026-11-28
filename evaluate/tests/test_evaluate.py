@@ -75,7 +75,8 @@ def test_pairing_ignores_haplotype_order():
 
 def test_strdust_uses_frb(tmp_path):
     p = vcf(tmp_path, ['chr1\t101\tchr1-100-130\tA\tT\t.\t.\tEND=130\tGT:RB:FRB\t0/1:0,3:30,33'])
-    assert C.read_calls('strdust', p, CAT) == {'chr1-100-130': C.Call([30, 33], '')}
+    c = C.read_calls('strdust', p, CAT)['chr1-100-130']
+    assert c.lengths == [30, 33] and c.flags == ''      # the sequences (here the one-base REF/ALT) are not used for the length
 
 
 def test_strdust_quickref_record_without_lengths_is_reference(tmp_path):
@@ -115,6 +116,64 @@ def test_concordance_all_loci_counts_unsupported_as_not_called_and_homopolymer_f
     h = M.concordance(calls, truth, CAT, not_supported=['chr2-50-60'], analysis='no_homopolymers')
     assert h['STR']['n_loci'] == 1 and h['STR']['n_not_supported'] == 0 and h['STR']['call_rate'] == 1.0
     assert h['all']['n_loci'] == 2 and h['all']['exact_of_truth_loci'] == 0.5
+
+def test_edit_distance_matches_a_reference_implementation():
+    import random
+
+    def dp(a, b):
+        prev = list(range(len(b) + 1))
+        for i, x in enumerate(a, 1):
+            cur = [i]
+            for j, y in enumerate(b, 1):
+                cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x != y)))
+            prev = cur
+        return prev[-1]
+    rnd = random.Random(1)
+    for _ in range(500):
+        al = rnd.choice(['AC', 'ACGT', 'A'])
+        a = ''.join(rnd.choice(al) for _ in range(rnd.randint(0, 30)))
+        b = ''.join(rnd.choice(al) for _ in range(rnd.randint(0, 30)))
+        assert M.edit_distance(a, b) == dp(a, b)
+
+
+def test_allele_sequence_is_cut_to_the_catalog_interval(tmp_path):
+    # catalog chr1:100-130 (30 bp). The record has 5 flank bases on both sides in REF and ALT (LongTR style)
+    flank_l, flank_r = 'TTTTT', 'GGGGG'
+    ref = 'CAG' * 10
+    alt = 'CAG' * 12
+    p = vcf(tmp_path, [f'chr1\t96\tchr1-100-130\t{flank_l}{ref}{flank_r}\t{flank_l}{alt}{flank_r}\t.\t.\tEND=130\tGT\t1|0'])
+    c = C.read_calls('longtr', p, CAT)['chr1-100-130']
+    assert c.lengths == [36, 30] and c.seqs == [alt, ref]
+
+
+def test_length_only_tool_has_no_sequences_and_vamos_alt_is_taken_whole(tmp_path):
+    p = vcf(tmp_path, ['chr1\t101\t.\tN\t<STR>\t.\t.\tEND=130\tGT:RB:FRB\t1|1:3,3:33,33'])
+    assert C.read_calls('inquistr', p, CAT)['chr1-100-130'].seqs is None
+    alt = 'CAG' * 11
+    p = vcf(tmp_path, [f'chr1\t101\t.\tA\t{alt}\t.\t.\tEND=130\tGT\t1/1'], 'v.vcf')
+    c = C.read_calls('vamos', p, CAT)['chr1-100-130']
+    assert c.seqs == [alt, alt]
+
+
+def test_sequence_concordance_counts_a_missing_call_as_wrong_and_pairs_by_edit_distance():
+    ref = 'CAG' * 10
+    other = 'CAG' * 9 + 'CAA'
+    cat = {'chr1-100-130': C.Locus('chr1', 100, 130, 'CAG'), 'chr1-200-260': C.Locus('chr1', 200, 260, 'CAGCAGCAGCAGCAG')}
+    calls = {'chr1-100-130': C.Call([30, 30], '', [other, ref])}               # haplotype order swapped
+    truth = {'chr1-100-130': [ref, other], 'chr1-200-260': ['A' * 60, 'A' * 60]}
+    r = M.sequence_concordance(calls, truth, cat)
+    assert r['all']['n_truth_seq'] == 2 and r['all']['n_seq_eval'] == 1
+    assert r['all']['seq_exact_genotype'] == 1.0 and r['all']['seq_exact_of_truth_loci'] == 0.5
+    assert M.sequence_concordance({'x': C.Call([1], '', None)}, truth, cat) is None
+
+
+def test_sequence_edit_distance_is_reported():
+    cat = {'chr1-100-130': C.Locus('chr1', 100, 130, 'CAG')}
+    ref = 'CAG' * 10
+    calls = {'chr1-100-130': C.Call([33, 30], '', [ref + 'CAG', ref])}
+    r = M.sequence_concordance(calls, {'chr1-100-130': [ref, ref]}, cat)
+    assert r['STR']['mean_edit_distance'] == 1.5 and r['STR']['seq_exact_alleles'] == 0.5
+
 
 if __name__ == '__main__':      # runs without pytest: python3 tests/test_evaluate.py
     import inspect

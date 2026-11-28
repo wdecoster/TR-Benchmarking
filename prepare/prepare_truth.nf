@@ -13,7 +13,8 @@ nextflow.enable.dsl = 2
  * the method of the paper's assembly_concordance.py.
  *
  *   nextflow run prepare/prepare_truth.nf -profile local -c conf/local/<site>.config --outdir <results>/inputs
- * Output: <outdir>/truth/<asm>.{mat,pat}.bam(.bai), their sha256 (of the downloaded FASTA), and HG002.truth.tsv.
+ * Output: <outdir>/truth/<asm>.{mat,pat}.bam(.bai), their sha256 (of the downloaded FASTA), HG002.truth.tsv (allele lengths) and
+ * HG002.truth.seq.tsv (allele sequences, for the sequence-level metrics).
  */
 
 params.ref      = null
@@ -112,14 +113,16 @@ process truth {
 
     output:
     path 'HG002.truth.tsv'
+    path 'HG002.truth.seq.tsv'
 
     script:
     """
-    python3 evaluate/truth_from_assembly.py --mat ${mat} --pat ${pat} --catalog ${catalog} --karyotype ${params.karyotype} --out HG002.truth.tsv
+    python3 evaluate/truth_from_assembly.py --mat ${mat} --pat ${pat} --catalog ${catalog} --karyotype ${params.karyotype} --out HG002.truth.tsv --seq-out HG002.truth.seq.tsv
     """
 
     stub:
     """
     echo stub > HG002.truth.tsv
+    echo stub > HG002.truth.seq.tsv
     """
 }

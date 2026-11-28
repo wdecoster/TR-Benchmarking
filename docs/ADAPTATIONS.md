@@ -72,3 +72,12 @@ its own files are in; alignments run two at a time (maxForks 2, 2 x 16 threads).
 Our pathogenic CRAMs (minimap2 with `-R @RG\tID:S\tSM:S`) have no LB tag, and LongTR 1.2 stops on that ("RG in BAM/CRAM header is lacking the LB tag").
 The paper's pathogenic workflows (`run_benchmarking_deveson*.nf`) always pass `--bam-samps S --bam-libs S`. `--longtr_rg true` does the same in default mode
 (sensitive mode always passed them). HG002 default commands are unchanged.
+
+### A-eval-1: sequence-level metrics (our own implementation)
+The paper's `assembly_concordance.py` compares sequences only for six tools and by its own flank handling. We implement the sequence level in
+`evaluate/` so that every tool goes through one code path and the numbers sit beside the length metrics: (1) truth sequences come from the same
+`cooper` call as the truth lengths (assembly contigs aligned with MAPQ >= 5 that span the locus, agreeing contigs only); (2) a called allele
+is cut to the catalog interval by removing the same number of flank bases from both ends of ALT as REF has beyond the interval (assumes the
+tool left its flanks untouched; vamos' ALT is taken whole, its REF being one base short); (3) edit distance is Levenshtein (Myers bit-parallel,
+no dependency), with the diploid haplotypes paired by the smaller total distance; (4) loci without a call count as wrong in `seq_exact_of_truth_loci`;
+(5) inquiSTR, mahi-mahi and straglr have no sequences: not applicable, never zero.

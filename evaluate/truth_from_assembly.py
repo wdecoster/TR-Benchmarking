@@ -6,8 +6,10 @@ assembly contig that aligns with MAPQ >= 5 and spans the whole locus gives an al
 haplotype has a truth length only when all its spanning contigs agree. A diploid locus needs both haplotypes; on chrX
 and chrY of an XY sample the single haplotype counts (chrX from the maternal, chrY from the paternal assembly).
 
-usage: truth_from_assembly.py --mat mat.bam --pat pat.bam --catalog benchmark-catalog-v2.strdust.bed --karyotype XY --out truth.tsv
+usage: truth_from_assembly.py --mat mat.bam --pat pat.bam --catalog benchmark-catalog-v2.strdust.bed --karyotype XY --out truth.tsv [--seq-out truth.seq.tsv]
 Output: locus ID <TAB> length (<TAB> length), shorter allele first; loci without truth are absent.
+--seq-out writes the allele sequences over the catalog interval in the same order (shorter first, equal lengths by sequence): the
+truth of the sequence-level metrics (evaluate.py --truth-seq).
 """
 import argparse
 import os
@@ -20,7 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from aam_mod import cooper      # noqa: E402
 
 
-def truth(mat_bam, pat_bam, catalog_bed, karyotype):
+def truth_alleles(mat_bam, pat_bam, catalog_bed, karyotype):
     with tempfile.TemporaryDirectory() as d:
         sorted_bed = os.path.join(d, 'catalog.bed')
         with open(catalog_bed) as fh, open(sorted_bed, 'w') as out:
@@ -39,7 +41,7 @@ def truth(mat_bam, pat_bam, catalog_bed, karyotype):
                 # sequence length is used here and disagreements are counted.
                 alleles = cooper(bam, tbx, 5, 0)
                 disagree[name] = sum(1 for v in alleles.values() if v[1] != len(v[2]))
-                res[name] = {k: len(v[2]) for k, v in alleles.items()}
+                res[name] = {k: (len(v[2]), str(v[2]).upper()) for k, v in alleles.items()}
         tbx.close()
     if any(disagree.values()):
         print(f'note: allele length and sequence length differ at {disagree} loci (boundary insertions); sequence length used', file=sys.stderr)
@@ -54,8 +56,13 @@ def truth(mat_bam, pat_bam, catalog_bed, karyotype):
         else:
             lens = [m, p] if m is not None and p is not None else []
         if lens:
-            out[k] = sorted(lens)
+            out[k] = sorted(lens)         # (length, sequence): shorter first, equal lengths by sequence
     return out
+
+
+def truth(mat_bam, pat_bam, catalog_bed, karyotype):
+    """Allele lengths per locus (shorter first)."""
+    return {k: [l for l, _ in v] for k, v in truth_alleles(mat_bam, pat_bam, catalog_bed, karyotype).items()}
 
 
 def main():
@@ -65,12 +72,19 @@ def main():
     ap.add_argument('--catalog', required=True)
     ap.add_argument('--karyotype', required=True, choices=['XX', 'XY'])
     ap.add_argument('--out', required=True)
+    ap.add_argument('--seq-out', help='also write the allele sequences')
     a = ap.parse_args()
-    t = truth(a.mat, a.pat, a.catalog, a.karyotype)
+    full = truth_alleles(a.mat, a.pat, a.catalog, a.karyotype)
+    t = {k: [l for l, _ in v] for k, v in full.items()}
     with open(a.out, 'w') as fh:
         fh.write('#locus\tlength_h1\tlength_h2\n')
         for k in sorted(t):
             fh.write(k + '\t' + '\t'.join(map(str, t[k])) + '\n')
+    if a.seq_out:
+        with open(a.seq_out, 'w') as fh:
+            fh.write('#locus\tseq_h1\tseq_h2\n')
+            for k in sorted(full):
+                fh.write(k + '\t' + '\t'.join(sq for _, sq in full[k]) + '\n')
     n = sum(1 for l in open(a.catalog) if l.strip() and not l.startswith('#'))
     print(f'{len(t)} of {n} catalog loci have a truth length', file=sys.stderr)
 

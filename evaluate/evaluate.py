@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Metrics for the tool outputs of one sample: call rate per motif class and, with a truth file, concordance with it.
 
-usage: evaluate.py --catalog benchmark-catalog-v2.strdust.bed --results <outdir>/default [--truth truth.tsv] [--json out.json]
+usage: evaluate.py --catalog benchmark-catalog-v2.strdust.bed --results <outdir>/default [--truth truth.tsv] [--truth-seq truth.seq.tsv] [--json out.json]
 
 Output files are found as written by main.nf: <results>/<tool>/<version>/<sample>.<suffix>. The truth file has one
 line per catalog locus with allele lengths of the assembly haplotypes: locus ID, then length_h1[, length_h2]
-(tab separated, haploid loci have one length). It is made by `truth_from_assembly.py` from the aligned assemblies.
+(tab separated, haploid loci have one length). It is made by `truth_from_assembly.py` from the aligned assemblies, which also
+writes the allele sequences (`--seq-out`, same layout) for the sequence-level metrics (`--truth-seq`; tools without sequences,
+inquiSTR, mahi-mahi and straglr, have none).
 """
 import argparse
 import glob
@@ -45,6 +47,17 @@ def read_truth(path):
     return truth
 
 
+def read_truth_seq(path):
+    truth = {}
+    with open(path) as fh:
+        for line in fh:
+            f = line.rstrip('\n').split('\t')
+            if f[0].startswith('#') or len(f) < 2:
+                continue
+            truth[f[0]] = [x for x in f[1:]]
+    return truth
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--catalog', required=True)
@@ -52,10 +65,12 @@ def main():
     ap.add_argument('--sample', default='HG002.30x.haplotagged')
     ap.add_argument('--karyotype', default='XY', choices=['XX', 'XY'], help='haploid chrX/chrY for XY')
     ap.add_argument('--truth')
+    ap.add_argument('--truth-seq', help='assembly allele sequences (truth_from_assembly.py --seq-out): adds the sequence-level metrics')
     ap.add_argument('--json')
     a = ap.parse_args()
     catalog = C.read_catalog(a.catalog)
     truth = read_truth(a.truth) if a.truth else {}
+    seq_truth = read_truth_seq(a.truth_seq) if a.truth_seq else None
     out = {}
     found = list(find_outputs(a.results, a.sample))
     if not found:
@@ -63,14 +78,23 @@ def main():
     for tool, version, path in found:
         calls = C.read_calls(tool, path, catalog, a.karyotype)
         out[f'{tool} {version}'] = {an: M.concordance(calls, truth, catalog, C.not_supported(tool, catalog), an) for an in M.ANALYSES}
+        if seq_truth is not None:
+            for an in M.ANALYSES:
+                sq = M.sequence_concordance(calls, seq_truth, catalog, an)
+                if sq:
+                    for cls, r in sq.items():
+                        out[f'{tool} {version}'][an][cls].update(r)
     cols = ['n_loci', 'n_not_supported', 'n_called', 'call_rate', 'call_rate_unflagged', 'n_eval', 'MATCH', 'ONE-OFF', 'MOTIF-OFF', 'MISMATCH',
             'exact_genotype', 'exact_of_truth_loci', 'mean_abs_diff']
+    if seq_truth is not None:
+        cols += ['n_truth_seq', 'n_seq_eval', 'seq_exact_alleles', 'seq_exact_genotype', 'seq_exact_of_truth_loci',
+                 'mean_edit_distance', 'mean_norm_edit_distance']
     print('tool version\tanalysis\tclass\t' + '\t'.join(cols))
     f = lambda x: '' if x is None else (f'{x:.4f}' if isinstance(x, float) else str(x))
     for k, by_analysis in out.items():
         for an, by_class in by_analysis.items():
             for cls, r in by_class.items():
-                print(f'{k}\t{an}\t{cls}\t' + '\t'.join(f(r[c]) for c in cols))
+                print(f'{k}\t{an}\t{cls}\t' + '\t'.join(f(r.get(c)) for c in cols))
     if a.json:
         with open(a.json, 'w') as fh:
             json.dump(out, fh, indent=1)

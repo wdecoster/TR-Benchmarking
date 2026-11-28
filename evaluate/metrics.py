@@ -102,3 +102,107 @@ def concordance(calls: Dict[str, Call], truth: Dict[str, List[int]], catalog: Di
         r['mean_abs_diff'] = abs_sum / n_alleles if n_alleles else None
         out[cls] = r
     return out
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Sequence level: edit distance between the called and the assembly allele sequence over the catalog interval.
+
+def edit_distance(a: str, b: str) -> int:
+    """Levenshtein distance (bit-parallel algorithm of Myers 1999 in Hyyro's form, on Python integers: no dependency)."""
+    if a == b:
+        return 0
+    if not a or not b:
+        return len(a) + len(b)
+    if len(a) < len(b):
+        a, b = b, a                       # the bit vectors run over the shorter string
+    m = len(b)
+    mask = (1 << m) - 1
+    high = 1 << (m - 1)
+    peq: Dict[str, int] = {}
+    for i, c in enumerate(b):
+        peq[c] = peq.get(c, 0) | (1 << i)
+    pv, mv, score = mask, 0, m
+    for c in a:
+        eq = peq.get(c, 0)
+        xv = eq | mv
+        xh = ((((eq & pv) + pv) & mask) ^ pv) | eq
+        ph = (mv | ~(xh | pv)) & mask
+        mh = pv & xh
+        if ph & high:
+            score += 1
+        elif mh & high:
+            score -= 1
+        ph = ((ph << 1) | 1) & mask
+        mh = (mh << 1) & mask
+        pv = (mh | ~(xv | ph)) & mask
+        mv = ph & xv
+    return score
+
+
+def pair_sequences(tool: Sequence[str], truth: Sequence[str]) -> List[Tuple[int, int, int]]:
+    """Pair called and assembly sequences like pair_alleles, but on edit distance. Returns (edit distance, length of the
+    called allele, length of the assembly allele) per assembly allele."""
+    t, a = list(tool), list(truth)
+
+    def d(x, y):
+        return edit_distance(x, y)
+    if len(t) == 2 and len(a) == 2:
+        p1 = [(t[0], a[0]), (t[1], a[1])]
+        p2 = [(t[0], a[1]), (t[1], a[0])]
+        d1 = [d(x, y) for x, y in p1]
+        d2 = [d(x, y) for x, y in p2]
+        pairs, ds = (p1, d1) if sum(d1) <= sum(d2) else (p2, d2)
+    else:
+        pairs, ds = [], []
+        for y in a:
+            best = min(t, key=lambda x: d(x, y))
+            pairs.append((best, y))
+            ds.append(d(best, y))
+    return [(e, len(x), len(y)) for e, (x, y) in zip(ds, pairs)]
+
+
+def sequence_concordance(calls: Dict[str, Call], seq_truth: Dict[str, List[str]], catalog: Dict[str, Locus],
+                         analysis: str = 'all_loci') -> Optional[Dict[str, dict]]:
+    """Per motif class: how well the called allele sequences equal the assembly sequences. None for a tool without sequences.
+
+    n_truth_seq            loci with assembly sequences in the analysis
+    n_seq_eval             of those, loci called with sequences (the alleles that are compared)
+    seq_exact_alleles      fraction of compared alleles with edit distance 0
+    seq_exact_genotype     fraction of the compared loci with every allele exact
+    seq_exact_of_truth_loci  exact loci / n_truth_seq: a locus without a call counts as wrong
+    mean_edit_distance     mean edit distance per compared allele (bp)
+    mean_norm_edit_distance  mean of edit distance / max(called length, assembly length) per compared allele
+    """
+    if not any(c.seqs for c in calls.values()):
+        return None
+    keep = ANALYSES[analysis]
+    out = {}
+    for cls in ('STR', 'VNTR', 'all'):
+        n_truth = n_eval = n_alleles = n_exact_alleles = n_exact_loci = 0
+        ed_sum = 0
+        norm_sum = 0.0
+        for l in catalog.values():
+            if not keep(l) or (cls != 'all' and l.motif_class != cls):
+                continue
+            t = seq_truth.get(l.id)
+            if not t:
+                continue
+            n_truth += 1
+            c = calls.get(l.id)
+            if c is None or not c.seqs:
+                continue
+            n_eval += 1
+            res = pair_sequences(c.seqs, t)
+            for e, lx, ly in res:
+                n_alleles += 1
+                n_exact_alleles += e == 0
+                ed_sum += e
+                norm_sum += e / max(lx, ly, 1)
+            n_exact_loci += all(e == 0 for e, _, _ in res)
+        out[cls] = dict(n_truth_seq=n_truth, n_seq_eval=n_eval,
+                        seq_exact_alleles=n_exact_alleles / n_alleles if n_alleles else None,
+                        seq_exact_genotype=n_exact_loci / n_eval if n_eval else None,
+                        seq_exact_of_truth_loci=n_exact_loci / n_truth if n_truth else None,
+                        mean_edit_distance=ed_sum / n_alleles if n_alleles else None,
+                        mean_norm_edit_distance=norm_sum / n_alleles if n_alleles else None)
+    return out
