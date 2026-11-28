@@ -193,6 +193,10 @@ def read_calls(tool: str, path: str, catalog: Dict[str, Locus], karyotype: str =
             info = _info(rec[7])
             key = _key(tool, rec, info)
             locus = catalog.get(key)
+            if locus is None and tool == 'vamos':
+                # vamos 3.0.5 writes the 0-based catalog start as POS, 3.1.1 the 1-based one
+                key = f'{rec[0]}-{int(rec[1])}-{info["END"]}'
+                locus = catalog.get(key)
             if locus is None:
                 continue
             fmt = dict(zip(rec[8].split(':'), rec[9].split(':')))

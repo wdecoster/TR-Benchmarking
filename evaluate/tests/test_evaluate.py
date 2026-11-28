@@ -198,6 +198,12 @@ def test_partial_genotype_gives_no_sequence_and_no_crash(tmp_path):
     assert c.seqs is None
 
 
+def test_vamos_305_writes_the_zero_based_start_as_pos(tmp_path):
+    alt = 'CAG' * 10
+    p = vcf(tmp_path, [f'chr1\t100\t.\tA\t{alt}\t.\t.\tEND=130\tGT\t1/1'])           # POS = 0-based start (3.0.5)
+    assert C.read_calls('vamos', p, CAT)['chr1-100-130'].lengths == [30, 30]
+
+
 if __name__ == '__main__':      # runs without pytest: python3 tests/test_evaluate.py
     import inspect
     import pathlib
