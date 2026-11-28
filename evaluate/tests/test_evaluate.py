@@ -192,6 +192,12 @@ def test_command_line_evaluates_one_output_with_sequences(tmp_path):
     assert r['n_called'] == 1 and r['n_seq_eval'] == 1 and r['mean_edit_distance'] == 0.5 and 'seq_exact_alleles' in out
 
 
+def test_partial_genotype_gives_no_sequence_and_no_crash(tmp_path):
+    p = vcf(tmp_path, ['chr1\t101\tchr1-100-130\t' + 'CAG' * 10 + '\t' + 'CAG' * 11 + '\t.\t.\tEND=130\tGT\t./1'])
+    c = C.read_calls('longtr', p, CAT)['chr1-100-130']
+    assert c.seqs is None
+
+
 if __name__ == '__main__':      # runs without pytest: python3 tests/test_evaluate.py
     import inspect
     import pathlib

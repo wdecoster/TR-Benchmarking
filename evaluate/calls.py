@@ -148,6 +148,8 @@ def _allele_seq(rec, a, locus, full=False) -> Optional[str]:
     the catalog interval exactly; this assumes the tool did not change its flanks. A REF that does not span the interval
     (vamos, which is one base shorter) cannot be trimmed: with `full` the ALT sequence is taken as the allele."""
     ref, alts = rec[3], rec[4].split(',') if rec[4] not in ('.', '') else []
+    if a is None:                      # a missing allele of a partial call (./1): no sequence
+        return None
     if a == 0:
         s = ref
     elif a <= len(alts) and alts[a - 1] in ('<DEL>', '*'):

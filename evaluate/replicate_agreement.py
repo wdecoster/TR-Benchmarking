@@ -38,8 +38,10 @@ def records(path):
 def agreement(tool, files, catalog):
     reps = []
     for f in files:
-        # the calls file is a header-less VCF, which read_calls reads as it is
-        reps.append((records(f), C.read_calls(tool, f, catalog)))
+        # the calls file is a header-less VCF, which read_calls reads as it is. The vamos files are the raw `<VNTR>` records
+        # (the sequence alleles come from the later fix-vcf step, which timing.nf does not keep): only the record-level
+        # identity can be judged for them, so their lengths are not read.
+        reps.append((records(f), {} if tool.startswith('vamos') else C.read_calls(tool, f, catalog)))
     keys = sorted(set().union(*[set(c) for _, c in reps]))
     # raw record per locus (key -> line) for the byte-identity check
     raw = []
@@ -47,10 +49,16 @@ def agreement(tool, files, catalog):
         d = {}
         for line in lines:
             rec = line.split('\t')
-            k = C._key(tool, rec, C._info(rec[7]))
+            if tool.startswith('vamos'):      # POS is the 0-based catalog start in vamos 3.0.5 and the 1-based one in 3.1.1
+                end = C._info(rec[7])['END']
+                k = next((x for x in (f'{rec[0]}-{rec[1]}-{end}', f'{rec[0]}-{int(rec[1]) - 1}-{end}') if x in catalog), '')
+            else:
+                k = C._key(tool, rec, C._info(rec[7]))
             if k in catalog:
                 d[k] = line
         raw.append(d)
+    if tool.startswith('vamos'):
+        keys = sorted(set().union(*[set(d) for d in raw]))
     n = len(reps)
     rec_ident = len_ident = stable = all_called = 0
     diffs = []
