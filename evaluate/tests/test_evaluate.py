@@ -175,6 +175,23 @@ def test_sequence_edit_distance_is_reported():
     assert r['STR']['mean_edit_distance'] == 1.5 and r['STR']['seq_exact_alleles'] == 0.5
 
 
+def test_command_line_evaluates_one_output_with_sequences(tmp_path):
+    import json
+    import subprocess
+    ref = 'CAG' * 10
+    cat = tmp_path / 'cat.bed'
+    cat.write_text('chr1\t100\t130\tCAG\n')
+    (tmp_path / 't.tsv').write_text('chr1-100-130\t30\t30\n')
+    (tmp_path / 'ts.tsv').write_text(f'chr1-100-130\t{ref}\t{ref}\n')
+    v = vcf(tmp_path, [f'chr1\t101\tchr1-100-130\t{ref}\t{ref}A\t.\t.\tEND=130\tGT:FRB\t1|0:31,30'], 'S.strdust.sorted.vcf')
+    ev = os.path.join(os.path.dirname(__file__), '..', 'evaluate.py')
+    out = subprocess.run([sys.executable, ev, '--catalog', str(cat), '--tool', 'strdust', '--version', 'x', '--vcf', v, '--sample', 'S',
+                          '--karyotype', 'XY', '--truth', str(tmp_path / 't.tsv'), '--truth-seq', str(tmp_path / 'ts.tsv'),
+                          '--json', str(tmp_path / 'o.json')], capture_output=True, text=True, check=True).stdout
+    r = json.load(open(tmp_path / 'o.json'))['strdust x']['all_loci']['all']
+    assert r['n_called'] == 1 and r['n_seq_eval'] == 1 and r['mean_edit_distance'] == 0.5 and 'seq_exact_alleles' in out
+
+
 if __name__ == '__main__':      # runs without pytest: python3 tests/test_evaluate.py
     import inspect
     import pathlib

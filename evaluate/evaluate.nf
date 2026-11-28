@@ -30,14 +30,14 @@ def label = params.label ?: params.sample
 if (!params.results || !params.truth || !params.evaldir) error("--results, --truth and --evaldir are required")
 
 workflow {
-    evaluate(file("${params.results}/${params.mode}", checkIfExists: true),
+    evaluate_results(file("${params.results}/${params.mode}", checkIfExists: true),
              file(params.catalog, checkIfExists: true),
              file(params.truth, checkIfExists: true),
-             params.truth_seq ? file(params.truth_seq, checkIfExists: true) : file('NO_FILE'),
+             params.truth_seq ? file(params.truth_seq, checkIfExists: true) : file("${projectDir}/../assets/NO_FILE"),
              file(projectDir))
 }
 
-process evaluate {
+process evaluate_results {
     container params.eval_container
     cpus 1
     memory 8.GB

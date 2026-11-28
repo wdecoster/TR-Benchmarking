@@ -26,5 +26,7 @@ Judgement calls in reading the outputs (for example vamos, QUICKREF records, par
   columns (shown as "not applicable", never as zero).
 - How a called allele is cut to the catalog interval, and what that assumes, is documented in `calls._allele_seq`; edit distances use
   `metrics.edit_distance` (Myers bit-parallel, no dependency, tested against a reference implementation).
-- `evaluate/evaluate.nf` runs `evaluate.py` as a containerised Nextflow step on one results folder and mode, so the evaluation is rerun the same
-  way for every new tool version (usage in the file header).
+- **Part of the workflow:** with `--truth` (and `--truth_seq`) `main.nf` evaluates every tool output of the run in a containerised step
+  (`evaluate_calls`, one task per tool and sample) and publishes `<outdir>/evaluation/<mode>/<sample>.<tool>.<version>.eval.{json,tsv}`,
+  so a new tool version is evaluated by the same run that produces its calls. `evaluate/evaluate.nf` re-evaluates existing results folders
+  with the same `evaluate.py` (for runs made before the step existed, or after a change of the metrics).

@@ -28,6 +28,20 @@ OUTPUTS = {
 }
 
 
+# when the output of a process is a directory (medaka, mahi-mahi), the VCF inside it
+INNER = {'medaka': 'medaka_to_ref.TR.vcf', 'mahimahi': '{sample}.vcf'}
+
+
+def resolve(tool, path, sample):
+    """The VCF of one tool output given as the workflow's output path (a file, or a directory for medaka and mahi-mahi)."""
+    if os.path.isdir(path):
+        inner = INNER.get(tool)
+        if not inner:
+            sys.exit(f'{path} is a directory but {tool} writes a single file')
+        path = os.path.join(path, inner.format(sample=sample))
+    return path
+
+
 def find_outputs(results, sample):
     for tool, pattern in OUTPUTS.items():
         for vdir in sorted(glob.glob(os.path.join(results, tool, '*'))):
@@ -61,7 +75,10 @@ def read_truth_seq(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--catalog', required=True)
-    ap.add_argument('--results', required=True)
+    ap.add_argument('--results', help='folder <results>/<tool>/<version>/<sample>.* as written by main.nf')
+    ap.add_argument('--tool', help='with --vcf: tool of this output (see calls.TOOLS)')
+    ap.add_argument('--version', default='', help='with --vcf: tool version, for the labels')
+    ap.add_argument('--vcf', help='one tool output (file, or directory for medaka and mahi-mahi) instead of --results')
     ap.add_argument('--sample', default='HG002.30x.haplotagged')
     ap.add_argument('--karyotype', default='XY', choices=['XX', 'XY'], help='haploid chrX/chrY for XY')
     ap.add_argument('--truth')
@@ -72,7 +89,14 @@ def main():
     truth = read_truth(a.truth) if a.truth else {}
     seq_truth = read_truth_seq(a.truth_seq) if a.truth_seq else None
     out = {}
-    found = list(find_outputs(a.results, a.sample))
+    if a.vcf:
+        if not a.tool:
+            sys.exit('--vcf needs --tool')
+        found = [(a.tool, a.version, resolve(a.tool, a.vcf, a.sample))]
+    elif a.results:
+        found = list(find_outputs(a.results, a.sample))
+    else:
+        sys.exit('give --results or --vcf')
     if not found:
         sys.exit(f'no tool outputs for sample {a.sample} under {a.results}')
     for tool, version, path in found:

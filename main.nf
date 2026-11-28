@@ -27,6 +27,9 @@ params.threads    = 1          // the paper timed every tool single-threaded
 params.catalog_dir = "${projectDir}/catalogs"
 params.catalog    = 'benchmark-catalog-v2'
 params.mosdepth   = false
+params.truth      = null      // assembly truth lengths (evaluate/truth_from_assembly.py): evaluate every output as part of the run
+params.truth_seq  = null      // assembly allele sequences: adds the sequence-level metrics (tools that write sequences)
+params.eval_container = 'quay.io/biocontainers/pysam:0.24.1--py312hf5ad864_0'   // evaluation needs python3 only
 params.longtr_rg  = false     // pass --bam-samps/--bam-libs to LongTR in default mode too (input without LB read-group tag: the pathogenic panel)
 params.haplotagged = true     // input reads carry HP/PS tags (GIAB EPI2ME CRAMs); false for the pathogenic panel (mahi-mahi, inquiSTR)
 
@@ -96,6 +99,28 @@ workflow {
         vamos_old(samples, ref, fai, file(cat('vamos.bed')), 'vamos_old', refcache)
         vamos_old_fix(vamos_old.out.raw, ref, fai, file("${projectDir}/scripts/${params.tool_versions.vamos_old.fix_script}"), 'vamos_old')
     }
+
+    // Evaluation as part of the run: the same evaluate/evaluate.py as for any rerun, one task per tool output and sample.
+    if (params.truth) {
+        // (tool, sample, output): the sample is the output's file name without the tool's suffix
+        def tag = { String tool, ch, String suffix -> ch.map { f -> tuple(tool, f.name.substring(0, f.name.length() - suffix.length()), f) } }
+        def outs = Channel.empty()
+        if ('atarva' in selected)   outs = outs.mix(tag('atarva', atarva.out, '.atarva.vcf'))
+        if (inqTools)               outs = outs.mix(inquistr.out.map { t, f -> tuple(t, f.name.substring(0, f.name.length() - '.inquistr.vcf'.length()), f) })
+        if ('longtr' in selected)   outs = outs.mix(tag('longtr', longtr.out, '.longTR.vcf.gz'))
+        if ('mahimahi' in selected) outs = outs.mix(tag('mahimahi', mahimahi.out.flatten().filter { it.name.endsWith('.vcf') }, '.vcf'))
+        if ('medaka' in selected)   outs = outs.mix(tag('medaka', medaka.out, '.medaka.vcf'))
+        if ('straglr' in selected)  outs = outs.mix(tag('straglr', straglr.out, '.vcf'))
+        if ('strdust' in selected)  outs = outs.mix(tag('strdust', strdust.out[1], '.strdust.sorted.vcf'))
+        if ('strkit' in selected)   outs = outs.mix(tag('strkit', strkit.out, params.mode == 'sensitive' ? '.strkit-min_read_1.vcf' : '.strkit.vcf'))
+        if ('vamos' in selected)    outs = outs.mix(tag('vamos', vamos_fix.out, '.vamos.fixed.vcf'))
+        if ('vamos_old' in selected) outs = outs.mix(tag('vamos_old', vamos_old_fix.out, '.vamos.fixed.vcf'))
+        karyo = samples.map { s, a, i, k -> [s, k] }.toList().map { it.collectEntries() }
+        evaluate_calls(outs.combine(karyo).map { t, s, f, m -> tuple(t, s, m[s], f) },
+                 file(cat('strdust.bed')), file(params.truth, checkIfExists: true),
+                 params.truth_seq ? file(params.truth_seq, checkIfExists: true) : file("${projectDir}/assets/NO_FILE"),
+                 file("${projectDir}/evaluate"))
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -162,6 +187,32 @@ process longtr {
     TrCommands.script('longtr', params.tool_versions.longtr, [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive, longtr_rg: params.longtr_rg as boolean])
 }
 
+process evaluate_calls {
+    tag "${tool} ${sample}"
+    container params.eval_container
+    cpus 1
+    memory 8.GB
+    publishDir "${params.outdir}/evaluation/${params.mode}", mode: 'copy'
+
+    input:
+    tuple val(tool), val(sample), val(karyotype), path(out, stageAs: 'toolout/*')
+    path catalog
+    path truth
+    path truth_seq
+    path evalcode, stageAs: 'evalcode'
+
+    output:
+    tuple path("${sample}.${tool}.${params.tool_versions[tool].version}.eval.json"), path("${sample}.${tool}.${params.tool_versions[tool].version}.eval.tsv")
+
+    script:
+    def seq = params.truth_seq ? "--truth-seq ${truth_seq}" : ''
+    def label = "${sample}.${tool}.${params.tool_versions[tool].version}"
+    """
+    python3 evalcode/evaluate.py --catalog ${catalog} --tool ${tool} --version ${params.tool_versions[tool].version} --vcf toolout/${out.name} \\
+        --sample ${sample} --karyotype ${karyotype} --truth ${truth} ${seq} --json ${label}.eval.json > ${label}.eval.tsv
+    """
+}
+
 process inquistr {
     tag "${sample}"
     container { params.tool_versions[tool].container }
@@ -176,7 +227,7 @@ process inquistr {
     path catalog
 
     output:
-    path "${sample}.inquistr.vcf"
+    tuple val(tool), path("${sample}.inquistr.vcf")
 
     script:
     TrCommands.script(tool, params.tool_versions[tool], [sample: sample, aln: aln, ref: ref, catalog: catalog, karyotype: karyotype, cpus: task.cpus, sensitive: sensitive, haplotagged: params.haplotagged as boolean])
