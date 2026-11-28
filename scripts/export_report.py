@@ -106,6 +106,15 @@ def main():
                                     record_identical=r['record_identical'], loci_length_differs=r['n_loci_length_differs'],
                                     max_len_diff=r['max_len_diff'], lengths_assessed=not tool.startswith('vamos')))
 
+    def vkey(v):
+        return [int(x) if x.isdigit() else x for x in v.replace('-', '.').split('.')]
+    newest = {}
+    for t in tools.values():
+        if t['tool'] not in newest or vkey(t['version']) > vkey(newest[t['tool']]):
+            newest[t['tool']] = t['version']
+    for t in tools.values():
+        t['latest'] = newest[t['tool']] == t['version']      # the newest version of the tool among those run (the current release)
+
     report = dict(
         schema_version=1, report_id=a.report_id, generated=a.report_id,
         benchmark=dict(repo='https://github.com/wdecoster/TR-Benchmarking', commit=a.commit,
